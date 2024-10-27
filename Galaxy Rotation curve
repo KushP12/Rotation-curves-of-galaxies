@@ -1,0 +1,110 @@
+import openpyxl
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+
+
+file_location = "Table1.xlsx"
+df = pd.read_excel(file_location,sheet_name='Sheet1', usecols="H")
+df2 = pd.read_excel(file_location,sheet_name='Sheet1', usecols="H,A")
+
+array = df.to_numpy() #converts the dataframe to an array 
+mass = (array * (1*(10**9)))*0.6 #obtains the mass from the luminosity
+
+#hist, bins, _ = plt.hist(mass, bins=8)
+#logbins = np.logspace(np.log10(bins[0]),np.log10(bins[-1]),len(bins))
+#lt.hist(mass, bins = logbins) #plots the histogram for the galaxy masses.
+#plt.xscale('log')
+#plt.xlabel("Masses of galaxies")
+#plt.title("Distribution of the galaxies by mass")
+#plt.show()
+def galaxy_separation(array):
+    high_mass = []
+    super_high_mass = []
+    low_mass = []
+    for each in mass: 
+        if each < (5*(10**8)):                      #Identifies the low mass galaxies and appends to a separate list 
+            low_mass.append(each)
+        elif  (1*(10**11)) > each > (1*(10**10)):   #identifies the high mass galaxies and appends to a separate list
+            high_mass.append(each) 
+        elif each > (1*(10**11)): 
+            super_high_mass.append(each)
+
+    low_mass2 = np.array(low_mass) #converts list to an array
+    low_mass2 = np.sort(low_mass2, axis = 0)
+    chunks1 = np.array_split(low_mass2, 4)
+
+    high_mass2 = np.array(high_mass) #converts list to an array
+    high_mass2 = np.sort(high_mass2, axis = 0)
+    chunks2 = np.array_split(high_mass2, 5)
+    
+    super_high_mass2 = np.array(super_high_mass)
+    super_high_mass2 = np.sort(super_high_mass2, axis = 0)
+    chunks3 = np.array_split(super_high_mass2, 2)
+    return chunks1, chunks2, chunks3, low_mass2, high_mass2, super_high_mass2
+
+
+
+def high_mass_galaxy(array):
+    
+    mass_to_light = (array/0.6)/(1*(10**9)) #reverse the mass back to luminosity for comparison to identify the names.
+    array2 = df2.to_numpy() #converts the dataframe to an array
+    galaxy = []
+    heavy_galaxy = []
+
+    for item in array2: #retrieves the name and luminosity of the stars in accordance with the high mass galaxies
+        if item in mass_to_light:
+            galaxy.append(item)
+
+    galaxy_name = []
+    heavy_galaxy_name = []
+    for each in galaxy: # retrieves the galaxy name only 
+        galaxy_name.append(each[0])
+
+    return galaxy_name
+
+def galaxy_data(file_name):  #Created a function to retrieve the data from the RodMod_LTG folder for the relevant high mass galaxy to produce rotation curves.
+    folder_path = '/cosma/home/durham/dc-pand2/Rodmod_LTG'
+    file_path = os.path.join(folder_path, file_name)
+    data = pd.read_csv(file_path, delimiter = '\t')
+    array_data = np.loadtxt(file_path)
+    Radius = []
+    velocity = []
+    for each in array_data:
+        Radius.append(each[0])
+        velocity.append(each[1])
+    return Radius, velocity
+
+
+
+def RotationCurve(MassArray, GalaxyName):   #Created a function that plots the data retrieved from the galaxy_data function
+    RadiusArray = []
+    for each in MassArray:
+        name = each
+        extension = '_rotmod.dat'
+        file_extension = each + extension
+        radius, velocity = galaxy_data(file_extension)
+        radius2 = np.array(radius, dtype=np.float64)
+        RadiusArray.append(radius2)
+        plt.plot(radius, velocity, label = each)
+        #plt.plot(averageRadius, velocity, label = each)
+        plt.title(GalaxyName)
+        plt.xlabel("Radius(kpc)")
+        plt.ylabel("V(km/s)")
+        
+    #plt.figure()
+
+
+LowMass, MediumMass, HighMass, LowMass2, MediumMass2, HighMass2 = galaxy_separation(mass)
+#print(HighMass2)
+for each in range(len(HighMass2)):
+    x = high_mass_galaxy(HighMass2[each])
+    #print(x)
+    R = RotationCurve(x, "High Mass")
+    
+x_ticks = plt.gca().get_xticks()
+x_ticks = np.delete(x_ticks, 0)
+
+
+plt.show()
