@@ -1,0 +1,12 @@
+import numpy as np
+from galpy.potential import (plotRotcurve, MWPotential2014 as mwp14, vcirc)
+import matplotlib.pyplot as plt
+from galpy.util import conversion
+
+
+plotRotcurve(mwp14, ro = 8.0, vo = 220.0)
+plotRotcurve(mwp14[0],label='Bulge',overplot=True, ro = 8.0, vo = 220.0)
+plotRotcurve(mwp14[1],label='Disk',overplot=True, ro = 8.0, vo = 220.0)
+plotRotcurve(mwp14[2],label='Halo',overplot=True, ro = 8.0, vo = 220.0)
+plt.title("Rotation curve for the Milky Way galaxy")
+plt.legend()
