@@ -3,11 +3,16 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import statistics
 
 
 file_location = "Table1.xlsx"
 df = pd.read_excel(file_location,sheet_name='Sheet1', usecols="H")
 df2 = pd.read_excel(file_location,sheet_name='Sheet1', usecols="H,A")
+df3 = pd.read_excel(file_location,sheet_name = 'Sheet1', usecols = "L,A")
+
+df3Array = df3.to_numpy()
+print(type(df3Array))
 
 array = df.to_numpy() #converts the dataframe to an array 
 mass = (array * (1*(10**9)))*0.6 #obtains the mass from the luminosity
@@ -51,16 +56,19 @@ def high_mass_galaxy(array):
     mass_to_light = (array/0.6)/(1*(10**9)) #reverse the mass back to luminosity for comparison to identify the names.
     array2 = df2.to_numpy() #converts the dataframe to an array
     galaxy = []
-    heavy_galaxy = []
 
     for item in array2: #retrieves the name and luminosity of the stars in accordance with the high mass galaxies
         if item in mass_to_light:
             galaxy.append(item)
 
     galaxy_name = []
-    heavy_galaxy_name = []
     for each in galaxy: # retrieves the galaxy name only 
         galaxy_name.append(each[0])
+
+    discLength = []
+    for each in galaxy_name:
+        if each in df3Array:
+            discLength.append(each)
 
     return galaxy_name
 
@@ -71,40 +79,153 @@ def galaxy_data(file_name):  #Created a function to retrieve the data from the R
     array_data = np.loadtxt(file_path)
     Radius = []
     velocity = []
+    V_gas = []
+    V_disk = []
+    V_bulge = []
     for each in array_data:
         Radius.append(each[0])
         velocity.append(each[1])
-    return Radius, velocity
+        V_gas.append(each[3])
+        V_disk.append(each[4])
+        V_bulge.append(each[5])
+    return Radius, velocity, V_gas, V_disk, V_bulge
 
 
 
 def RotationCurve(MassArray, GalaxyName):   #Created a function that plots the data retrieved from the galaxy_data function
     RadiusArray = []
+    VelocityArray = []
+    RadiusNormalised = []
     for each in MassArray:
         name = each
         extension = '_rotmod.dat'
         file_extension = each + extension
-        radius, velocity = galaxy_data(file_extension)
+        radius, velocity, VGas, VDisk, VBulge = galaxy_data(file_extension)
         radius2 = np.array(radius, dtype=np.float64)
+        if each in df3Array:
+            value = np.where(df3Array == each)
+            disc = df3Array[value[0],1]
+        radiusNormalised = radius/disc
+        RadiusNormalised.append(radiusNormalised)
         RadiusArray.append(radius2)
-        plt.plot(radius, velocity, label = each)
-        #plt.plot(averageRadius, velocity, label = each)
-        plt.title(GalaxyName)
-        plt.xlabel("Radius(kpc)")
-        plt.ylabel("V(km/s)")
+        VelocityArray.append(velocity)
+        #plt.subplot(2,1,1)
+        #plt.plot(radius, velocity, label = each)
+        #plt.title(GalaxyName)
+        #plt.xlabel("Radius(kpc)")
+        #plt.ylabel("V(km/s)")
+        #plt.tight_layout()
+        #plt.legend(loc=1, prop={'size': 6})
+        
+        
+        #plt.plot(radius, VGas, label = each)
+        #plt.title(GalaxyName)
+        #plt.xlabel("Radius(kpc)")
+        #plt.ylabel("V(km/s)")
+        
+        
+        #plt.plot(radius, VDisk, label = each)
+        #plt.title(GalaxyName)
+        #plt.xlabel("Radius(kpc)")
+        #plt.ylabel("V(km/s)")
+    
+        #plt.plot(radius, VBulge, label = each)
+        #plt.title(GalaxyName)
+        #plt.xlabel("Radius(kpc)")
+        #plt.ylabel("V(km/s)")
+        
+        
+        
+        #plt.subplot(2,1,2)
+        plt.plot(radiusNormalised, velocity, label = each)
+        plt.title(GalaxyName + " Normalised")
+        plt.xlabel("($R / R_d$)")
+        plt.ylabel("V (km/s)")
+        #plt.tight_layout()
+        #plt.legend(loc=1, prop={'size': 6})
+        
         
     #plt.figure()
+    
+    return RadiusArray, VelocityArray, RadiusNormalised, VGas#, VDisk, VBulge
+
+
+
+def AverageFunction(InitialValues, Radius, Velocity, bin_size):
+    selected_velocities_by_range = [[] for _ in range(len(InitialValues) - 1)]
+
+    # Iterate over each range defined by consecutive values in the ranges array
+    for k in range(len(InitialValues) - 1):
+        lower_bound = InitialValues[k]
+        upper_bound = InitialValues[k + 1]
+
+        # Iterate over elements in the radius array
+        for i in range(len(Radius)):
+            for j in range(len(Radius[i])):
+                # Check if the radius value falls within the current range
+                if lower_bound <= Radius[i][j] < upper_bound:
+                    # Append the corresponding velocity value to the list for the current range
+                    selected_velocities_by_range[k].append(Velocity[i][j])
+                    
+
+
+    # List to store the average velocity for each range
+    average_velocities = []
+    std_devs = []
+
+    # Calculate the average for each range
+    for velocities in selected_velocities_by_range:
+        if velocities:  # Check if the list is not empty to avoid division by zero
+            average = sum(velocities) / len(velocities)
+            std_dev = statistics.stdev(velocities) if len(velocities) > 1 else 0
+        
+        average_velocities.append(average)
+        std_devs.append(std_dev)
+        
+    upper_bound = [avg + sd for avg, sd in zip(average_velocities, std_devs)]
+    lower_bound = [avg - sd for avg, sd in zip(average_velocities, std_devs)]
+    
+    
+    
+    return average_velocities, std_devs, upper_bound, lower_bound   
+                
+    
+
+
+def AverageFunctionPlotting(GalaxyMass, bin_size, maxPlus):
+    x = high_mass_galaxy(GalaxyMass)
+    R, V, RN, VG = RotationCurve(x, " ")
+    x_ticks = plt.gca().get_xticks()
+    X_ticks = np.delete( x_ticks, -1)
+    maxValue = np.max(X_ticks)
+    radius = np.linspace(0, maxValue + maxPlus, bin_size)
+    bin_size = radius[1] - radius[0]
+    val, stddev, up, down = AverageFunction(radius, RN, V, bin_size)
+    return val, radius, stddev, up, down
+
 
 
 LowMass, MediumMass, HighMass, LowMass2, MediumMass2, HighMass2 = galaxy_separation(mass)
-#print(HighMass2)
-for each in range(len(HighMass2)):
-    x = high_mass_galaxy(HighMass2[each])
-    #print(x)
-    R = RotationCurve(x, "High Mass")
-    
-x_ticks = plt.gca().get_xticks()
-x_ticks = np.delete(x_ticks, 0)
 
+'''for each in LowMass:
+    average, radius = AverageFunctionPlotting(each, 15, 2)
+    x = statistics.stdev(average)
+    upperbound = []
+    lowerbound = []
+    for each in average: 
+        upperbound.append(each + x)
+        lowerbound.append(each - x)
+    radius = np.delete(radius, -1)
+    #plt.plot(radius, average, label = "Average")
+    plt.legend(bbox_to_anchor=(1.05, 1.0),prop={'size': 7} ,loc='upper left')
+    #plt.fill_between(radius, upperbound, lowerbound, color="lightblue",alpha=0.4)
+    plt.figure()'''
+
+average, radius, stddev ,upper, lower = AverageFunctionPlotting(HighMass2, 18, 1.2)
+radius = np.delete(radius, -1)
+plt.plot(radius,average, color = 'black', label = "Average")
+#plt.title("Velocity of the bulge against radius")
+plt.legend(bbox_to_anchor=(1.0, 1.0),prop={'size': 6}, ncol = 1 ,loc='upper left')
+plt.fill_between(radius, upper, lower, color="grey",alpha=0.4)
 
 plt.show()
