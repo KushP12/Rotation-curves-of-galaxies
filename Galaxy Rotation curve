@@ -4,6 +4,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import statistics
+from galpy.potential import MWPotential2014, vcirc
+#from galpy.util import bovy_conversion
+from galpy.orbit import Orbit
+import astropy.units as u
+
 
 
 file_location = "Table1.xlsx"
@@ -96,11 +101,19 @@ def RotationCurve(MassArray, GalaxyName):   #Created a function that plots the d
     RadiusArray = []
     VelocityArray = []
     RadiusNormalised = []
+    VCombined = []
+    VBULGE = []
     for each in MassArray:
         name = each
         extension = '_rotmod.dat'
         file_extension = each + extension
         radius, velocity, VGas, VDisk, VBulge = galaxy_data(file_extension)
+        Vbulge = np.array(VBulge)
+        Vgas = np.array(VGas)
+        Vdisk = np.array(VDisk)
+        VBULGE.append(VBulge)
+        VD_G = np.sqrt(Vgas**2 + Vdisk**2) 
+        VCombined.append(VD_G)
         radius2 = np.array(radius, dtype=np.float64)
         if each in df3Array:
             value = np.where(df3Array == each)
@@ -118,36 +131,31 @@ def RotationCurve(MassArray, GalaxyName):   #Created a function that plots the d
         #plt.legend(loc=1, prop={'size': 6})
         
         
-        #plt.plot(radius, VGas, label = each)
+        plt.plot(radius, VBulge, label = each)
         #plt.title(GalaxyName)
-        #plt.xlabel("Radius(kpc)")
-        #plt.ylabel("V(km/s)")
+        plt.xlabel("Radius(kpc)")
+        plt.ylabel("V(km/s)")
         
         
-        #plt.plot(radius, VDisk, label = each)
+        #plt.plot(radius, VD_G, label = each)
         #plt.title(GalaxyName)
         #plt.xlabel("Radius(kpc)")
         #plt.ylabel("V(km/s)")
     
-        #plt.plot(radius, VBulge, label = each)
-        #plt.title(GalaxyName)
-        #plt.xlabel("Radius(kpc)")
-        #plt.ylabel("V(km/s)")
-        
-        
+            
         
         #plt.subplot(2,1,2)
-        plt.plot(radiusNormalised, velocity, label = each)
-        plt.title(GalaxyName + " Normalised")
-        plt.xlabel("($R / R_d$)")
-        plt.ylabel("V (km/s)")
+        #plt.plot(radiusNormalised, velocity, label = each)
+        #plt.title(GalaxyName + " Normalised")
+        #plt.xlabel("($R / R_d$)")
+        #plt.ylabel("V (km/s)")
         #plt.tight_layout()
         #plt.legend(loc=1, prop={'size': 6})
         
         
     #plt.figure()
     
-    return RadiusArray, VelocityArray, RadiusNormalised, VGas#, VDisk, VBulge
+    return RadiusArray, VelocityArray, RadiusNormalised, VBULGE, VCombined
 
 
 
@@ -192,40 +200,84 @@ def AverageFunction(InitialValues, Radius, Velocity, bin_size):
     
 
 
-def AverageFunctionPlotting(GalaxyMass, bin_size, maxPlus):
+def AverageFunctionPlotting(GalaxyMass, bin_size, maxPlus, GalaxySection):
     x = high_mass_galaxy(GalaxyMass)
-    R, V, RN, VG = RotationCurve(x, " ")
-    x_ticks = plt.gca().get_xticks()
-    X_ticks = np.delete( x_ticks, -1)
-    maxValue = np.max(X_ticks)
-    radius = np.linspace(0, maxValue + maxPlus, bin_size)
-    bin_size = radius[1] - radius[0]
-    val, stddev, up, down = AverageFunction(radius, RN, V, bin_size)
+    R, V, RN, VB, VDB = RotationCurve(x, " ")
+    if GalaxySection == "VB":
+        x_ticks = plt.gca().get_xticks()
+        X_ticks = np.delete( x_ticks, -1)
+        maxValue = np.max(X_ticks)
+        radius = np.linspace(0, maxValue + maxPlus, bin_size)
+        bin_size = radius[1] - radius[0]
+        val, stddev, up, down = AverageFunction(radius, R, VB, bin_size)
+    else:
+        x_ticks = plt.gca().get_xticks()
+        X_ticks = np.delete( x_ticks, -1)
+        maxValue = np.max(X_ticks)
+        radius = np.linspace(0, maxValue + maxPlus, bin_size)
+        bin_size = radius[1] - radius[0]
+        val, stddev, up, down = AverageFunction(radius, R, VDB, bin_size)
     return val, radius, stddev, up, down
 
 
 
 LowMass, MediumMass, HighMass, LowMass2, MediumMass2, HighMass2 = galaxy_separation(mass)
 
-'''for each in LowMass:
-    average, radius = AverageFunctionPlotting(each, 15, 2)
-    x = statistics.stdev(average)
-    upperbound = []
-    lowerbound = []
-    for each in average: 
-        upperbound.append(each + x)
-        lowerbound.append(each - x)
+'''for each in HighMass:
+    average, radius, stddev, upper, lower = AverageFunctionPlotting(each, 20, 14)
     radius = np.delete(radius, -1)
-    #plt.plot(radius, average, label = "Average")
-    plt.legend(bbox_to_anchor=(1.05, 1.0),prop={'size': 7} ,loc='upper left')
-    #plt.fill_between(radius, upperbound, lowerbound, color="lightblue",alpha=0.4)
+    plt.plot(radius, average, color = "black" ,label = "Average")
+    plt.scatter(radius, average, s = 7 ,color = "black" ,label = "Average")
+    plt.legend(bbox_to_anchor=(1.0, 1.0),prop={'size': 7} ,loc='upper left')
+    plt.fill_between(radius, upper, lower, color="grey",alpha=0.4)
     plt.figure()'''
 
-average, radius, stddev ,upper, lower = AverageFunctionPlotting(HighMass2, 18, 1.2)
-radius = np.delete(radius, -1)
-plt.plot(radius,average, color = 'black', label = "Average")
-#plt.title("Velocity of the bulge against radius")
-plt.legend(bbox_to_anchor=(1.0, 1.0),prop={'size': 6}, ncol = 1 ,loc='upper left')
-plt.fill_between(radius, upper, lower, color="grey",alpha=0.4)
+plt.figure()
+average1, radius1, stddev ,upper1, lower1 = AverageFunctionPlotting(HighMass2, 15, 0.3, "VDB")
+radius1 = np.delete(radius1, -1)
+plt.plot(radius1,average1, color = "black",label = "Average")
+plt.scatter(radius1, average1, s = 7, color = "black")
+plt.fill_between(radius1, upper1, lower1, color="grey",alpha=0.4)
+plt.title("Bulge velocity curves")
+
+
+'''plt.figure()
+average2, radius2, stddev ,upper2, lower2 = AverageFunctionPlotting(MediumMass2, 25, 4)
+radius2 = np.delete(radius2, -1)
+plt.plot(radius2,average2, color = "black",label = "Average")
+plt.scatter(radius2, average2, s = 7 ,color = 'black' ,label = "Average")
+plt.fill_between(radius2, upper2, lower2, color="grey",alpha=0.4)
+
+plt.figure()
+average3, radius3, stddev ,upper3, lower3 = AverageFunctionPlotting(LowMass2, 15, 2)
+radius3 = np.delete(radius3, -1)
+plt.plot(radius3,average3, color = "black",label = "Average")
+plt.scatter(radius3, average3, s = 7 ,color = 'black' ,label = "Average")
+plt.fill_between(radius3, upper3, lower3, color="grey",alpha=0.4)'''
+
+
+plt.legend(bbox_to_anchor=(1.0, 1.0),prop={'size': 6}, ncol =2 ,loc='upper left')
+
+Rrange = np.linspace(0, 110,10)
+
+
+
+'''plt.figure()
+plotRotcurve(mwp14, ro = 20.0, vo = 235.0, label = "Milky Way")
+plt.xlim(left=-1)
+plt.yticks([0, 50, 100, 150, 200, 250, 300, 350, 400])
+plt.xticks([0, 20, 40, 60, 80, 100, 120])
+plt.plot(radius1,average1, color = "Red",label = "High mass")
+plt.scatter(radius1, average1, s = 7 ,color = 'Red' )#,label = "High mass")
+plt.fill_between(radius1, upper1, lower1, color="grey",alpha=0.4)
+plt.plot(radius2,average2, color = "Green",label = "Medium mass")
+plt.scatter(radius2, average2, s = 7 ,color = 'Green' )#,label = "Medium mass")
+plt.fill_between(radius2, upper2, lower2, color="grey",alpha=0.4)
+plt.plot(radius3,average3, color = "Orange",label = "Low mass")
+plt.scatter(radius3, average3, s = 7 ,color = 'Orange' )#,label = "Low mass")
+plt.fill_between(radius3, upper3, lower3, color="grey",alpha=0.4)
+plt.legend()'''
+
+
 
 plt.show()
