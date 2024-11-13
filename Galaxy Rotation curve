@@ -97,12 +97,13 @@ def galaxy_data(file_name):  #Created a function to retrieve the data from the R
 
 
 
-def RotationCurve(MassArray, GalaxyName):   #Created a function that plots the data retrieved from the galaxy_data function
+def RotationCurve(MassArray, GalaxyName, GalaxySection):   #Created a function that plots the data retrieved from the galaxy_data function
     RadiusArray = []
     VelocityArray = []
     RadiusNormalised = []
     VCombined = []
     VBULGE = []
+    VDarkMat = []
     for each in MassArray:
         name = each
         extension = '_rotmod.dat'
@@ -111,51 +112,58 @@ def RotationCurve(MassArray, GalaxyName):   #Created a function that plots the d
         Vbulge = np.array(VBulge)
         Vgas = np.array(VGas)
         Vdisk = np.array(VDisk)
-        VBULGE.append(VBulge)
-        VD_G = np.sqrt(Vgas**2 + Vdisk**2) 
+        Velocity = np.array(velocity)
+        VBULGE.append(VBulge)                                     #appends the bulge to a list so it can be returned
+        VD_G = np.sqrt(Vgas**2 + Vdisk**2)                        #combines the contribution from gas and disk in quadrature
         VCombined.append(VD_G)
+        #VDM = np.sqrt((Velocity**2) - ((Vbulge**2) + (VD_G**2)))  #calculate the dark matter halo in quadrature
+        #VDarkMat.append(VDM)
         radius2 = np.array(radius, dtype=np.float64)
         if each in df3Array:
             value = np.where(df3Array == each)
-            disc = df3Array[value[0],1]
+            disc = df3Array[value[0],1]                           #identifies the disk scale length to be used in normalisation
         radiusNormalised = radius/disc
         RadiusNormalised.append(radiusNormalised)
         RadiusArray.append(radius2)
         VelocityArray.append(velocity)
-        #plt.subplot(2,1,1)
+
+        #plot the rotation curve for each galaxy in the array
         #plt.plot(radius, velocity, label = each)
-        #plt.title(GalaxyName)
         #plt.xlabel("Radius(kpc)")
         #plt.ylabel("V(km/s)")
-        #plt.tight_layout()
         #plt.legend(loc=1, prop={'size': 6})
-        
-        
-        plt.plot(radius, VBulge, label = each)
-        #plt.title(GalaxyName)
-        plt.xlabel("Radius(kpc)")
-        plt.ylabel("V(km/s)")
-        
-        
-        #plt.plot(radius, VD_G, label = each)
-        #plt.title(GalaxyName)
-        #plt.xlabel("Radius(kpc)")
-        #plt.ylabel("V(km/s)")
-    
-            
-        
-        #plt.subplot(2,1,2)
+
+        #plots the normalised rotation curve for each galaxy in the array
         #plt.plot(radiusNormalised, velocity, label = each)
-        #plt.title(GalaxyName + " Normalised")
         #plt.xlabel("($R / R_d$)")
         #plt.ylabel("V (km/s)")
-        #plt.tight_layout()
         #plt.legend(loc=1, prop={'size': 6})
+
+
+        
+        #identifies which part of the galaxy needs plotting (disk, bulge, dark matter) or the whole rotation curve
+        if GalaxySection == "VB":
+            plt.plot(radius, VBulge, label = each)
+            plt.xlabel("Radius(kpc)")
+            plt.ylabel("V(km/s)")
+        elif GalaxySection == "VDB": 
+            plt.plot(radius, VD_G, label = each)
+            plt.xlabel("Radius(kpc)")
+            plt.ylabel("V(km/s)")
+        elif GalaxySection == "VDM":
+            plt.plot(radius, V, label = each)
+            plt.xlabel("Radius(kpc)")
+            plt.ylabel("V(km/s)")
+        else:
+            plt.plot(radius, velocity, label = each)
+            plt.xlabel("Radius(kpc)")
+            plt.ylabel("V(km/s)")
+            
         
         
     #plt.figure()
     
-    return RadiusArray, VelocityArray, RadiusNormalised, VBULGE, VCombined
+    return RadiusArray, VelocityArray, RadiusNormalised, VBULGE, VCombined#, VDarkMat
 
 
 
@@ -173,9 +181,7 @@ def AverageFunction(InitialValues, Radius, Velocity, bin_size):
                 # Check if the radius value falls within the current range
                 if lower_bound <= Radius[i][j] < upper_bound:
                     # Append the corresponding velocity value to the list for the current range
-                    selected_velocities_by_range[k].append(Velocity[i][j])
-                    
-
+                    selected_velocities_by_range[k].append(Velocity[i][j])               
 
     # List to store the average velocity for each range
     average_velocities = []
@@ -202,7 +208,8 @@ def AverageFunction(InitialValues, Radius, Velocity, bin_size):
 
 def AverageFunctionPlotting(GalaxyMass, bin_size, maxPlus, GalaxySection):
     x = high_mass_galaxy(GalaxyMass)
-    R, V, RN, VB, VDB = RotationCurve(x, " ")
+    R, V, RN, VB, VDB = RotationCurve(x, " ", GalaxySection)
+    #Runs a selection statement to correctly use the right aspect of the galaxy for the averaging.
     if GalaxySection == "VB":
         x_ticks = plt.gca().get_xticks()
         X_ticks = np.delete( x_ticks, -1)
@@ -210,14 +217,53 @@ def AverageFunctionPlotting(GalaxyMass, bin_size, maxPlus, GalaxySection):
         radius = np.linspace(0, maxValue + maxPlus, bin_size)
         bin_size = radius[1] - radius[0]
         val, stddev, up, down = AverageFunction(radius, R, VB, bin_size)
-    else:
+    elif GalaxySection == "VDB":
         x_ticks = plt.gca().get_xticks()
         X_ticks = np.delete( x_ticks, -1)
         maxValue = np.max(X_ticks)
         radius = np.linspace(0, maxValue + maxPlus, bin_size)
         bin_size = radius[1] - radius[0]
         val, stddev, up, down = AverageFunction(radius, R, VDB, bin_size)
+    #elif GalaxySection == "VDM":
+    #    x_ticks = plt.gca().get_xticks()
+    #    X_ticks = np.delete( x_ticks, -1)
+    #    maxValue = np.max(X_ticks)
+    #    radius = np.linspace(0, maxValue + maxPlus, bin_size)
+    #    bin_size = radius[1] - radius[0]
+    #    val, stddev, up, down = AverageFunction(radius, R, VDM, bin_size)
+    else:
+        x_ticks = plt.gca().get_xticks()
+        X_ticks = np.delete( x_ticks, -1)
+        maxValue = np.max(X_ticks)
+        radius = np.linspace(0, maxValue + maxPlus, bin_size)
+        bin_size = radius[1] - radius[0]
+        val, stddev, up, down = AverageFunction(radius, R, V, bin_size)
+        
     return val, radius, stddev, up, down
+
+
+def DarkMatterCalculate(Total, DiskGas, Bulge, TotalStdev, DiskGasStdDev, BulgeStdev):
+    v_total = np.array(Total)       # Total rotation curve
+    v_bulge = np.array(Bulge)       # Bulge rotation curve
+    v_disk_gas = np.array(DiskGas)    # Disk + gas rotation curve
+    sigma_total = np.array(TotalStdev)   # Uncertainty in total rotation
+    sigma_bulge = np.array(BulgeStdev)   # Uncertainty in bulge rotation
+    sigma_disk_gas = np.array(DiskGasStdDev) # Uncertainty in disk + gas rotation
+
+    # Calculate dark matter rotation curve
+    v_DM_squared = v_total**2 - v_bulge**2 - v_disk_gas**2
+    v_DM = np.sqrt(np.maximum(v_DM_squared, 0))  # Set negative values to zero to avoid NaN
+
+    # Calculate the standard deviation of the dark matter component
+    sigma_v_DM_squared = np.sqrt(
+        (2 * v_total * sigma_total)**2 +
+        (2 * v_bulge * sigma_bulge)**2 +
+        (2 * v_disk_gas * sigma_disk_gas)**2
+    )
+    with np.errstate(divide='ignore', invalid='ignore'):
+        sigma_DM = np.where(v_DM > 0, sigma_v_DM_squared / (2 * v_DM), np.nan)
+
+    return v_DM, sigma_DM
 
 
 
@@ -233,22 +279,82 @@ LowMass, MediumMass, HighMass, LowMass2, MediumMass2, HighMass2 = galaxy_separat
     plt.figure()'''
 
 plt.figure()
-average1, radius1, stddev ,upper1, lower1 = AverageFunctionPlotting(HighMass2, 15, 0.3, "VDB")
+average1, radius1, stddev1 ,upper1, lower1 = AverageFunctionPlotting(HighMass2, 25, 13, "VB")
 radius1 = np.delete(radius1, -1)
 plt.plot(radius1,average1, color = "black",label = "Average")
 plt.scatter(radius1, average1, s = 7, color = "black")
 plt.fill_between(radius1, upper1, lower1, color="grey",alpha=0.4)
 plt.title("Bulge velocity curves")
 
+average2, radius2, stddev2 ,upper2, lower2 = AverageFunctionPlotting(HighMass2, 25, 13, "VDB")
+radius2 = np.delete(radius2, -1)
+plt.plot(radius2,average2, color = "black",label = "Average")
+plt.scatter(radius2, average2, s = 7, color = "black")
+plt.fill_between(radius2, upper2, lower2, color="grey",alpha=0.4)
+plt.title("Disk + gas velocity curves")
+
+
+average4, radius4, stddev4 ,upper4, lower4 = AverageFunctionPlotting(HighMass2, 25, 13, "")
+radius4 = np.delete(radius4, -1)
+plt.plot(radius4, average4, color = "black",label = "Total")
+plt.scatter(radius4, average4, s = 7, color = "black")
+plt.fill_between(radius4, upper4, lower4, color="grey",alpha=0.4)
+plt.title(" Total rotaion curves curves")
+
+
+
+
+DMHigh, DMStdevHigh = DarkMatterCalculate(averageHigh4, averageHigh2, averageHigh, stddevHigh4, stddevHigh2, stddevHigh)
+DMMedium, DMStdevMedium = DarkMatterCalculate(averageMedium4, averageMedium2, averageMedium, stddevMedium4, stddevMedium2, stddevMedium)
+DMLow, DMStdevLow = DarkMatterCalculate(averageLow4, averageLow2, averageLow, stddevLow4, stddevLow2, stddevLow)
+    
+
+plt.figure()
+plt.title("High mass")
+plt.xlabel("Radius(kpc)")
+plt.ylabel("Velocity (km/s)")
+
+plt.plot(radius1,average1, color = "blue",label = "Bulge")
+plt.scatter(radius1, average1, s = 7, color = "blue")
+plt.fill_between(radius1, upper1, lower1, color="blue",alpha=0.4)
+
+plt.plot(radius2,average2, color = "black",label = "Disk + gas")
+plt.scatter(radius2, average2, s = 7, color = "black")
+plt.fill_between(radius2, upper2, lower2, color="grey",alpha=0.4)
+
+plt.plot(radius4, average4, color = "brown",label = "Total")
+plt.scatter(radius4, average4, s = 7, color = "brown")
+plt.fill_between(radius4, upper4, lower4, color="brown",alpha=0.4)
+
+
+plt.plot(radius4, DMHigh, color = "purple",label = "Total")
+plt.scatter(radius4, DMHigh, s = 7, color = "purple")
+plt.fill_between(radius4, DMHigh + DMStdevHigh, DMHigh - DMStdevHigh, color="purple",alpha=0.4)
+
+
+
+
+
+
+
+
+
+
 
 '''plt.figure()
-average2, radius2, stddev ,upper2, lower2 = AverageFunctionPlotting(MediumMass2, 25, 4)
+plotRotcurve(mwp14, ro = 10.0, vo = 235.0, color = "Blue",label = "Milky Way")
+plt.xlim(left=-1)
+#plt.yticks([0, 50, 100, 150, 200, 250, 300, 350, 400])
+plt.xticks([0, 10, 20, 30, 40, 50])
+average2, radius2, stddev ,upper2, lower2 = AverageFunctionPlotting(MediumMass[3], 23, 10, "")
 radius2 = np.delete(radius2, -1)
 plt.plot(radius2,average2, color = "black",label = "Average")
 plt.scatter(radius2, average2, s = 7 ,color = 'black' ,label = "Average")
-plt.fill_between(radius2, upper2, lower2, color="grey",alpha=0.4)
+plt.fill_between(radius2, upper2, lower2, color="grey",alpha=0.4)'''
 
-plt.figure()
+
+
+'''plt.figure()
 average3, radius3, stddev ,upper3, lower3 = AverageFunctionPlotting(LowMass2, 15, 2)
 radius3 = np.delete(radius3, -1)
 plt.plot(radius3,average3, color = "black",label = "Average")
@@ -256,13 +362,10 @@ plt.scatter(radius3, average3, s = 7 ,color = 'black' ,label = "Average")
 plt.fill_between(radius3, upper3, lower3, color="grey",alpha=0.4)'''
 
 
-plt.legend(bbox_to_anchor=(1.0, 1.0),prop={'size': 6}, ncol =2 ,loc='upper left')
+plt.legend(bbox_to_anchor=(1.0, 1.0),prop={'size': 6}, ncol =1 ,loc='upper left')
 
-Rrange = np.linspace(0, 110,10)
-
-
-
-'''plt.figure()
+'''Rrange = np.linspace(0, 110,10)
+plt.figure()
 plotRotcurve(mwp14, ro = 20.0, vo = 235.0, label = "Milky Way")
 plt.xlim(left=-1)
 plt.yticks([0, 50, 100, 150, 200, 250, 300, 350, 400])
