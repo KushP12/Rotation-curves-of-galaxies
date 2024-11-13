@@ -224,13 +224,6 @@ def AverageFunctionPlotting(GalaxyMass, bin_size, maxPlus, GalaxySection):
         radius = np.linspace(0, maxValue + maxPlus, bin_size)
         bin_size = radius[1] - radius[0]
         val, stddev, up, down = AverageFunction(radius, R, VDB, bin_size)
-    #elif GalaxySection == "VDM":
-    #    x_ticks = plt.gca().get_xticks()
-    #    X_ticks = np.delete( x_ticks, -1)
-    #    maxValue = np.max(X_ticks)
-    #    radius = np.linspace(0, maxValue + maxPlus, bin_size)
-    #    bin_size = radius[1] - radius[0]
-    #    val, stddev, up, down = AverageFunction(radius, R, VDM, bin_size)
     else:
         x_ticks = plt.gca().get_xticks()
         X_ticks = np.delete( x_ticks, -1)
@@ -278,63 +271,125 @@ LowMass, MediumMass, HighMass, LowMass2, MediumMass2, HighMass2 = galaxy_separat
     plt.fill_between(radius, upper, lower, color="grey",alpha=0.4)
     plt.figure()'''
 
-plt.figure()
-average1, radius1, stddev1 ,upper1, lower1 = AverageFunctionPlotting(HighMass2, 25, 13, "VB")
-radius1 = np.delete(radius1, -1)
-plt.plot(radius1,average1, color = "black",label = "Average")
-plt.scatter(radius1, average1, s = 7, color = "black")
-plt.fill_between(radius1, upper1, lower1, color="grey",alpha=0.4)
-plt.title("Bulge velocity curves")
-
-average2, radius2, stddev2 ,upper2, lower2 = AverageFunctionPlotting(HighMass2, 25, 13, "VDB")
-radius2 = np.delete(radius2, -1)
-plt.plot(radius2,average2, color = "black",label = "Average")
-plt.scatter(radius2, average2, s = 7, color = "black")
-plt.fill_between(radius2, upper2, lower2, color="grey",alpha=0.4)
-plt.title("Disk + gas velocity curves")
 
 
-average4, radius4, stddev4 ,upper4, lower4 = AverageFunctionPlotting(HighMass2, 25, 13, "")
-radius4 = np.delete(radius4, -1)
-plt.plot(radius4, average4, color = "black",label = "Total")
-plt.scatter(radius4, average4, s = 7, color = "black")
-plt.fill_between(radius4, upper4, lower4, color="grey",alpha=0.4)
-plt.title(" Total rotaion curves curves")
+def RotationCurveBreakDownPlot(MassType, Bin_size, Extension):
+    plt.figure()
+    average1, radius1, stddev1 ,upper1, lower1 = AverageFunctionPlotting(MassType, Bin_size, Extension, "VB")
+    radius1 = np.delete(radius1, -1)
+    plt.plot(radius1,average1, color = "black",label = "Average")
+    plt.scatter(radius1, average1, s = 7, color = "black")
+    plt.fill_between(radius1, upper1, lower1, color="grey",alpha=0.4)
+    plt.title("Bulge velocity curves")
+
+    plt.figure()
+    average2, radius2, stddev2 ,upper2, lower2 = AverageFunctionPlotting(MassType, Bin_size, Extension, "VDB")
+    radius2 = np.delete(radius2, -1)
+    plt.plot(radius2,average2, color = "black",label = "Average")
+    plt.scatter(radius2, average2, s = 7, color = "black")
+    plt.fill_between(radius2, upper2, lower2, color="grey",alpha=0.4)
+    plt.title("Disk + gas velocity curves")
 
 
+    plt.figure()
+    average4, radius4, stddev4 ,upper4, lower4 = AverageFunctionPlotting(MassType, Bin_size, Extension, "")
+    radius4 = np.delete(radius4, -1)
+    plt.plot(radius4, average4, color = "black",label = "Total")
+    plt.scatter(radius4, average4, s = 7, color = "black")
+    plt.fill_between(radius4, upper4, lower4, color="grey",alpha=0.4)
+    plt.title(" Total rotaion curves curves")
 
-
-DMHigh, DMStdevHigh = DarkMatterCalculate(averageHigh4, averageHigh2, averageHigh, stddevHigh4, stddevHigh2, stddevHigh)
-DMMedium, DMStdevMedium = DarkMatterCalculate(averageMedium4, averageMedium2, averageMedium, stddevMedium4, stddevMedium2, stddevMedium)
-DMLow, DMStdevLow = DarkMatterCalculate(averageLow4, averageLow2, averageLow, stddevLow4, stddevLow2, stddevLow)
     
+    DM, DMStdev = DarkMatterCalculate(average4, average2, average1, stddev4, stddev2, stddev1)
+
+    
+    plt.figure()
+    plt.title("Medium mass")
+    plt.xlabel("Radius(kpc)")
+    plt.ylabel("Velocity (km/s)")
+
+    plt.plot(radius1,average1, color = "blue",label = "Bulge")
+    plt.scatter(radius1, average1, s = 7, color = "blue")
+    plt.fill_between(radius1, upper1, lower1, color="blue",alpha=0.4)
+
+    plt.plot(radius2,average2, color = "black",label = "Disk + gas")
+    plt.scatter(radius2, average2, s = 7, color = "black")
+    plt.fill_between(radius2, upper2, lower2, color="grey",alpha=0.4)
+
+    plt.plot(radius4, average4, color = "brown",label = "Total")
+    plt.scatter(radius4, average4, s = 7, color = "brown")
+    plt.fill_between(radius4, upper4, lower4, color="brown",alpha=0.4)
+
+    plt.plot(radius4, DM, color = "purple",label = "Dark Matter")
+    plt.scatter(radius4, DM, s = 7, color = "purple")
+    plt.fill_between(radius4, DM + DMStdev, DM - DMStdev, color="purple",alpha=0.4)
+
+
+    return radius1, radius2, radius4, average1, average2, average4, DM, upper1, lower1, upper2, lower2, upper4, lower4, DMStdev
+
+
+
+R1, R2, R4, A1, A2, A4, DM, U1, L1, U2, L2, U4, L4, DMStd = RotationCurveBreakDownPlot(HighMass2, 25, 13)
+RM1, RM2, RM4, AM1, AM2, AM4, DMM, UM1, LM1, UM2, LM2, UM4, LM4, DMMStd = RotationCurveBreakDownPlot(MediumMass2, 25, 10)
+RL1, RL2, RL4, AL1, AL2, AL4, DLM, UL1, LL1, UL2, LL2, UL4, LL4, DMLStd = RotationCurveBreakDownPlot(LowMass2, 15, 2)
 
 plt.figure()
+plt.subplot(2,2,1)
 plt.title("High mass")
-plt.xlabel("Radius(kpc)")
-plt.ylabel("Velocity (km/s)")
+plt.plot(R1,A1, color = "blue",label = "Bulge")
+plt.scatter(R1, A1, s = 7, color = "blue")
+plt.fill_between(R1, U1, L1, color="blue",alpha=0.4)
 
-plt.plot(radius1,average1, color = "blue",label = "Bulge")
-plt.scatter(radius1, average1, s = 7, color = "blue")
-plt.fill_between(radius1, upper1, lower1, color="blue",alpha=0.4)
+plt.plot(R2, A2, color = "black",label = "Disk + gas")
+plt.scatter(R2, A2, s = 7, color = "black")
+plt.fill_between(R2, U2, L2, color="grey",alpha=0.4)
 
-plt.plot(radius2,average2, color = "black",label = "Disk + gas")
-plt.scatter(radius2, average2, s = 7, color = "black")
-plt.fill_between(radius2, upper2, lower2, color="grey",alpha=0.4)
+plt.plot(R4, A4, color = "brown",label = "Total")
+plt.scatter(R4, A4, s = 7, color = "brown")
+plt.fill_between(R4, U4, L4, color="brown",alpha=0.4)
 
-plt.plot(radius4, average4, color = "brown",label = "Total")
-plt.scatter(radius4, average4, s = 7, color = "brown")
-plt.fill_between(radius4, upper4, lower4, color="brown",alpha=0.4)
-
-
-plt.plot(radius4, DMHigh, color = "purple",label = "Total")
-plt.scatter(radius4, DMHigh, s = 7, color = "purple")
-plt.fill_between(radius4, DMHigh + DMStdevHigh, DMHigh - DMStdevHigh, color="purple",alpha=0.4)
+plt.plot(R4, DM, color = "purple",label = "Dark Matter")
+plt.scatter(R4, DM, s = 7, color = "purple")
+plt.fill_between(R4, DM + DMStd, DM - DMStd, color="purple",alpha=0.4)
 
 
+plt.subplot(2,2,2)
+plt.title("Medium mass")
+plt.plot(RM1,AM1, color = "blue",label = "Bulge")
+plt.scatter(RM1, AM1, s = 7, color = "blue")
+plt.fill_between(RM1, UM1, LM1, color="blue",alpha=0.4)
+
+plt.plot(RM2, AM2, color = "black",label = "Disk + gas")
+plt.scatter(RM2, AM2, s = 7, color = "black")
+plt.fill_between(RM2, UM2, LM2, color="grey",alpha=0.4)
+
+plt.plot(RM4, AM4, color = "brown",label = "Total")
+plt.scatter(RM4, AM4, s = 7, color = "brown")
+plt.fill_between(RM4, UM4, LM4, color="brown",alpha=0.4)
+
+plt.plot(RM4, DMM, color = "purple",label = "Dark Matter")
+plt.scatter(RM4, DMM, s = 7, color = "purple")
+plt.fill_between(RM4, DMM + DMMStd, DMM - DMMStd, color="purple",alpha=0.4)
 
 
+plt.subplot(2,2,3)
+plt.title("Low mass")
+plt.plot(RL1,AL1, color = "blue",label = "Bulge")
+plt.scatter(RL1, AL1, s = 7, color = "blue")
+plt.fill_between(RL1, UL1, LL1, color="blue",alpha=0.4)
 
+plt.plot(RL2, AL2, color = "black",label = "Disk + gas")
+plt.scatter(RL2, AL2, s = 7, color = "black")
+plt.fill_between(RL2, UL2, LL2, color="grey",alpha=0.4)
+
+plt.plot(RL4, AL4, color = "brown",label = "Total")
+plt.scatter(RL4, AL4, s = 7, color = "brown")
+plt.fill_between(RL4, UL4, LL4, color="brown",alpha=0.4)
+
+plt.plot(RL4, DLM, color = "purple",label = "Dark Matter")
+plt.scatter(RL4, DLM, s = 7, color = "purple")
+plt.fill_between(RL4, DLM + DMLStd, DLM - DMLStd, color="purple",alpha=0.4)
+plt.tight_layout()
 
 
 
