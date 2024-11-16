@@ -8,19 +8,22 @@ from galpy.potential import MWPotential2014, vcirc
 #from galpy.util import bovy_conversion
 from galpy.orbit import Orbit
 import astropy.units as u
+from astropy.io import ascii
 
 
 
-file_location = "Table1.xlsx"
-df = pd.read_excel(file_location,sheet_name='Sheet1', usecols="H")
-df2 = pd.read_excel(file_location,sheet_name='Sheet1', usecols="H,A")
-df3 = pd.read_excel(file_location,sheet_name = 'Sheet1', usecols = "L,A")
+file_location = "Maximum disk galaxy data.xlsx"
+df = pd.read_excel(file_location,sheet_name='Sheet1', usecols="B") #mass values from excel
+df3 = pd.read_excel(file_location,sheet_name = 'Sheet1', usecols = "A, B") # mass + names of the galaxies
+df4 = pd.read_excel(file_location,sheet_name = 'Sheet1', usecols = "A,B,R") # mass + names + disk scale of galaxies
 
-df3Array = df3.to_numpy()
-print(type(df3Array))
+mass = df.to_numpy()
+MassNames = df3.to_numpy()
+MassDiskScale = df4.to_numpy()
+#print(mass)
 
-array = df.to_numpy() #converts the dataframe to an array 
-mass = (array * (1*(10**9)))*0.6 #obtains the mass from the luminosity
+
+
 
 #hist, bins, _ = plt.hist(mass, bins=8)
 #logbins = np.logspace(np.log10(bins[0]),np.log10(bins[-1]),len(bins))
@@ -30,40 +33,49 @@ mass = (array * (1*(10**9)))*0.6 #obtains the mass from the luminosity
 #plt.title("Distribution of the galaxies by mass")
 #plt.show()
 def galaxy_separation(array):
+    medium_mass = []
     high_mass = []
     super_high_mass = []
     low_mass = []
     for each in mass: 
-        if each < (5*(10**8)):                      #Identifies the low mass galaxies and appends to a separate list 
+        if each < (5*(10**9)):                      #Identifies the low mass galaxies and appends to a separate list 
             low_mass.append(each)
         elif  (1*(10**11)) > each > (1*(10**10)):   #identifies the high mass galaxies and appends to a separate list
-            high_mass.append(each) 
-        elif each > (1*(10**11)): 
+            medium_mass.append(each) 
+        elif (1*(10**12)) > each > (1*(10**11)): 
+            high_mass.append(each)
+        elif each > (1*(10**12)):
             super_high_mass.append(each)
+            
 
     low_mass2 = np.array(low_mass) #converts list to an array
     low_mass2 = np.sort(low_mass2, axis = 0)
     chunks1 = np.array_split(low_mass2, 4)
 
+    
+    medium_mass2 = np.array(medium_mass) #converts list to an array
+    medium_mass2 = np.sort(medium_mass2, axis = 0)
+    chunks2 = np.array_split(medium_mass2, 4)
+
     high_mass2 = np.array(high_mass) #converts list to an array
     high_mass2 = np.sort(high_mass2, axis = 0)
-    chunks2 = np.array_split(high_mass2, 5)
+    chunks3 = np.array_split(high_mass2, 5)
     
     super_high_mass2 = np.array(super_high_mass)
     super_high_mass2 = np.sort(super_high_mass2, axis = 0)
-    chunks3 = np.array_split(super_high_mass2, 2)
-    return chunks1, chunks2, chunks3, low_mass2, high_mass2, super_high_mass2
+    chunks4 = np.array_split(super_high_mass2, 2)
+    return chunks1,chunks2 ,chunks3, chunks4, low_mass2,  medium_mass2, high_mass2, super_high_mass2
 
 
 
 def high_mass_galaxy(array):
     
-    mass_to_light = (array/0.6)/(1*(10**9)) #reverse the mass back to luminosity for comparison to identify the names.
-    array2 = df2.to_numpy() #converts the dataframe to an array
+    #mass_to_light = (array/0.6)/(1*(10**9) #reverse the mass back to luminosity for comparison to identify the names.
+    #array2 = df2.to_numpy() #converts the dataframe to an array
     galaxy = []
 
-    for item in array2: #retrieves the name and luminosity of the stars in accordance with the high mass galaxies
-        if item in mass_to_light:
+    for item in MassNames: #retrieves the name and luminosity of the stars in accordance with the galaxies
+        if item in array:
             galaxy.append(item)
 
     galaxy_name = []
@@ -78,9 +90,9 @@ def high_mass_galaxy(array):
     return galaxy_name
 
 def galaxy_data(file_name):  #Created a function to retrieve the data from the RodMod_LTG folder for the relevant high mass galaxy to produce rotation curves.
-    folder_path = '/cosma/home/durham/dc-pand2/Rodmod_LTG'
+    folder_path = '/cosma/home/durham/dc-pand2'
     file_path = os.path.join(folder_path, file_name)
-    data = pd.read_csv(file_path, delimiter = '\t')
+    data = pd.read_csv(file_path ,delimiter = "\t")
     array_data = np.loadtxt(file_path)
     Radius = []
     velocity = []
@@ -92,7 +104,7 @@ def galaxy_data(file_name):  #Created a function to retrieve the data from the R
         velocity.append(each[1])
         V_gas.append(each[3])
         V_disk.append(each[4])
-        V_bulge.append(each[5])
+        V_bulge.append(each[7])
     return Radius, velocity, V_gas, V_disk, V_bulge
 
 
@@ -102,35 +114,35 @@ def RotationCurve(MassArray, GalaxyName, GalaxySection):   #Created a function t
     VelocityArray = []
     RadiusNormalised = []
     VCombined = []
-    VBULGE = []
+    VGas = []
     VDarkMat = []
     for each in MassArray:
         name = each
-        extension = '_rotmod.dat'
+        extension = '.txt'
         file_extension = each + extension
         radius, velocity, VGas, VDisk, VBulge = galaxy_data(file_extension)
         Vbulge = np.array(VBulge)
         Vgas = np.array(VGas)
         Vdisk = np.array(VDisk)
         Velocity = np.array(velocity)
-        VBULGE.append(VBulge)                                     #appends the bulge to a list so it can be returned
-        VD_G = np.sqrt(Vgas**2 + Vdisk**2)                        #combines the contribution from gas and disk in quadrature
+        VGas.append(Vgas)                                     #appends the bulge to a list so it can be returned
+        VD_G = np.sqrt(Vbulge**2 + Vdisk**2)                        #combines the contribution from gas and disk in quadrature
         VCombined.append(VD_G)
         #VDM = np.sqrt((Velocity**2) - ((Vbulge**2) + (VD_G**2)))  #calculate the dark matter halo in quadrature
         #VDarkMat.append(VDM)
         radius2 = np.array(radius, dtype=np.float64)
-        if each in df3Array:
-            value = np.where(df3Array == each)
-            disc = df3Array[value[0],1]                           #identifies the disk scale length to be used in normalisation
+        if each in MassDiskScale:
+            value = np.where(MassDiskScale == each)
+            disc = MassDiskScale[value[0],2]                           #identifies the disk scale length to be used in normalisation
         radiusNormalised = radius/disc
         RadiusNormalised.append(radiusNormalised)
         RadiusArray.append(radius2)
         VelocityArray.append(velocity)
 
         #plot the rotation curve for each galaxy in the array
-        #plt.plot(radius, velocity, label = each)
-        #plt.xlabel("Radius(kpc)")
-        #plt.ylabel("V(km/s)")
+        plt.plot(radius, velocity, label = each)
+        plt.xlabel("Radius(kpc)")
+        plt.ylabel("V(km/s)")
         #plt.legend(loc=1, prop={'size': 6})
 
         #plots the normalised rotation curve for each galaxy in the array
@@ -163,7 +175,7 @@ def RotationCurve(MassArray, GalaxyName, GalaxySection):   #Created a function t
         
     #plt.figure()
     
-    return RadiusArray, VelocityArray, RadiusNormalised, VBULGE, VCombined#, VDarkMat
+    return RadiusArray, VelocityArray, RadiusNormalised, VGas, VCombined#, VDarkMat
 
 
 
@@ -260,7 +272,7 @@ def DarkMatterCalculate(Total, DiskGas, Bulge, TotalStdev, DiskGasStdDev, BulgeS
 
 
 
-LowMass, MediumMass, HighMass, LowMass2, MediumMass2, HighMass2 = galaxy_separation(mass)
+LowMass, MediumMass, HighMass, SuperHighMass, LowMass2, MediumMass2, HighMass2, SuperHighMass2 = galaxy_separation(mass)
 
 '''for each in HighMass:
     average, radius, stddev, upper, lower = AverageFunctionPlotting(each, 20, 14)
@@ -271,6 +283,18 @@ LowMass, MediumMass, HighMass, LowMass2, MediumMass2, HighMass2 = galaxy_separat
     plt.fill_between(radius, upper, lower, color="grey",alpha=0.4)
     plt.figure()'''
 
+
+
+plt.figure()
+average1, radius1, stddev1 ,upper1, lower1 = AverageFunctionPlotting(SuperHighMass2, 20, 10, "")
+radius1 = np.delete(radius1, -1)
+plt.plot(radius1,average1, color = "black",label = "Average")
+plt.scatter(radius1, average1, s = 7, color = "black")
+plt.fill_between(radius1, upper1, lower1, color="grey",alpha=0.4)
+plt.legend()
+handles, labels = plt.gca().get_legend_handles_labels()  
+lgd = dict(zip(labels, handles))
+plt.legend(lgd.values(), lgd.keys(),bbox_to_anchor=(1.0, 1.0),prop={'size': 6}, ncol =1 ,loc='upper left')
 
 
 def RotationCurveBreakDownPlot(MassType, Bin_size, Extension):
@@ -329,11 +353,10 @@ def RotationCurveBreakDownPlot(MassType, Bin_size, Extension):
 
 
 
-R1, R2, R4, A1, A2, A4, DM, U1, L1, U2, L2, U4, L4, DMStd = RotationCurveBreakDownPlot(HighMass2, 25, 13)
+'''R1, R2, R4, A1, A2, A4, DM, U1, L1, U2, L2, U4, L4, DMStd = RotationCurveBreakDownPlot(HighMass2, 25, 13)
 RM1, RM2, RM4, AM1, AM2, AM4, DMM, UM1, LM1, UM2, LM2, UM4, LM4, DMMStd = RotationCurveBreakDownPlot(MediumMass2, 25, 10)
-RL1, RL2, RL4, AL1, AL2, AL4, DLM, UL1, LL1, UL2, LL2, UL4, LL4, DMLStd = RotationCurveBreakDownPlot(LowMass2, 15, 2)
-
-plt.figure()
+RL1, RL2, RL4, AL1, AL2, AL4, DLM, UL1, LL1, UL2, LL2, UL4, LL4, DMLStd = RotationCurveBreakDownPlot(LowMass2, 15, 2)'''
+'''plt.figure()
 plt.subplot(2,2,1)
 plt.title("High mass")
 plt.plot(R1,A1, color = "blue",label = "Bulge")
@@ -389,7 +412,7 @@ plt.fill_between(RL4, UL4, LL4, color="brown",alpha=0.4)
 plt.plot(RL4, DLM, color = "purple",label = "Dark Matter")
 plt.scatter(RL4, DLM, s = 7, color = "purple")
 plt.fill_between(RL4, DLM + DMLStd, DLM - DMLStd, color="purple",alpha=0.4)
-plt.tight_layout()
+plt.tight_layout()'''
 
 
 
@@ -417,7 +440,7 @@ plt.scatter(radius3, average3, s = 7 ,color = 'black' ,label = "Average")
 plt.fill_between(radius3, upper3, lower3, color="grey",alpha=0.4)'''
 
 
-plt.legend(bbox_to_anchor=(1.0, 1.0),prop={'size': 6}, ncol =1 ,loc='upper left')
+#plt.legend(bbox_to_anchor=(1.0, 1.0),prop={'size': 6}, ncol =1 ,loc='upper left')
 
 '''Rrange = np.linspace(0, 110,10)
 plt.figure()
