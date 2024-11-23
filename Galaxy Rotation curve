@@ -5,14 +5,15 @@ import numpy as np
 import os
 import statistics
 from galpy.potential import MWPotential2014, vcirc
-#from galpy.util import bovy_conversion
 from galpy.orbit import Orbit
 import astropy.units as u
 from astropy.io import ascii
+import warnings
+from matplotlib import font_manager
+from matplotlib.gridspec import GridSpec
 
 
-
-file_location = "Maximum disk galaxy data.xlsx"
+file_location = "Maximum disk galaxy data without NGC.xlsx"
 df = pd.read_excel(file_location,sheet_name='Sheet1', usecols="B") #mass values from excel
 df3 = pd.read_excel(file_location,sheet_name = 'Sheet1', usecols = "A, B") # mass + names of the galaxies
 df4 = pd.read_excel(file_location,sheet_name = 'Sheet1', usecols = "A,B,R") # mass + names + disk scale of galaxies
@@ -20,9 +21,8 @@ df4 = pd.read_excel(file_location,sheet_name = 'Sheet1', usecols = "A,B,R") # ma
 mass = df.to_numpy()
 MassNames = df3.to_numpy()
 MassDiskScale = df4.to_numpy()
+print(MassDiskScale[0][2])
 #print(mass)
-
-
 
 
 #hist, bins, _ = plt.hist(mass, bins=8)
@@ -35,43 +35,34 @@ MassDiskScale = df4.to_numpy()
 def galaxy_separation(array):
     medium_mass = []
     high_mass = []
-    super_high_mass = []
     low_mass = []
     for each in mass: 
-        if each < (5*(10**9)):                      #Identifies the low mass galaxies and appends to a separate list 
+        if each < (5*(10**8)):                      #Identifies the low mass galaxies and appends to a separate list 
             low_mass.append(each)
         elif  (1*(10**11)) > each > (1*(10**10)):   #identifies the high mass galaxies and appends to a separate list
             medium_mass.append(each) 
-        elif (1*(10**12)) > each > (1*(10**11)): 
+        elif each > (1*(10**11)): 
             high_mass.append(each)
-        elif each > (1*(10**12)):
-            super_high_mass.append(each)
             
 
     low_mass2 = np.array(low_mass) #converts list to an array
     low_mass2 = np.sort(low_mass2, axis = 0)
-    chunks1 = np.array_split(low_mass2, 4)
+    chunks1 = np.array_split(low_mass2, 3)
 
-    
     medium_mass2 = np.array(medium_mass) #converts list to an array
     medium_mass2 = np.sort(medium_mass2, axis = 0)
     chunks2 = np.array_split(medium_mass2, 4)
 
     high_mass2 = np.array(high_mass) #converts list to an array
     high_mass2 = np.sort(high_mass2, axis = 0)
-    chunks3 = np.array_split(high_mass2, 5)
+    chunks3 = np.array_split(high_mass2, 3)
     
-    super_high_mass2 = np.array(super_high_mass)
-    super_high_mass2 = np.sort(super_high_mass2, axis = 0)
-    chunks4 = np.array_split(super_high_mass2, 2)
-    return chunks1,chunks2 ,chunks3, chunks4, low_mass2,  medium_mass2, high_mass2, super_high_mass2
+   
+    return chunks1,chunks2 ,chunks3, low_mass2,  medium_mass2, high_mass2
 
 
 
 def high_mass_galaxy(array):
-    
-    #mass_to_light = (array/0.6)/(1*(10**9) #reverse the mass back to luminosity for comparison to identify the names.
-    #array2 = df2.to_numpy() #converts the dataframe to an array
     galaxy = []
 
     for item in MassNames: #retrieves the name and luminosity of the stars in accordance with the galaxies
@@ -90,7 +81,7 @@ def high_mass_galaxy(array):
     return galaxy_name
 
 def galaxy_data(file_name):  #Created a function to retrieve the data from the RodMod_LTG folder for the relevant high mass galaxy to produce rotation curves.
-    folder_path = '/cosma/home/durham/dc-pand2'
+    folder_path = '/cosma/home/durham/dc-pand2/Rodmod_LTG2'
     file_path = os.path.join(folder_path, file_name)
     data = pd.read_csv(file_path ,delimiter = "\t")
     array_data = np.loadtxt(file_path)
@@ -107,15 +98,16 @@ def galaxy_data(file_name):  #Created a function to retrieve the data from the R
         V_bulge.append(each[7])
     return Radius, velocity, V_gas, V_disk, V_bulge
 
-
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 def RotationCurve(MassArray, GalaxyName, GalaxySection):   #Created a function that plots the data retrieved from the galaxy_data function
     RadiusArray = []
     VelocityArray = []
     RadiusNormalised = []
     VCombined = []
-    VGas = []
+    VG = []
     VDarkMat = []
+    RelativeError = []
     for each in MassArray:
         name = each
         extension = '.txt'
@@ -125,24 +117,28 @@ def RotationCurve(MassArray, GalaxyName, GalaxySection):   #Created a function t
         Vgas = np.array(VGas)
         Vdisk = np.array(VDisk)
         Velocity = np.array(velocity)
-        VGas.append(Vgas)                                     #appends the bulge to a list so it can be returned
-        VD_G = np.sqrt(Vbulge**2 + Vdisk**2)                        #combines the contribution from gas and disk in quadrature
-        VCombined.append(VD_G)
-        #VDM = np.sqrt((Velocity**2) - ((Vbulge**2) + (VD_G**2)))  #calculate the dark matter halo in quadrature
-        #VDarkMat.append(VDM)
+        VG.append(Vgas)                                     #appends the bulge to a list so it can be returned
+        VB_D = np.sqrt(Vbulge**2 + Vdisk**2)                        #combines the contribution from gas and disk in quadrature
+        VCombined.append(VB_D)
+        #print(VCombined)
+        VDM = np.sqrt((Velocity**2) - ((Vgas**2) + (VB_D**2)))#calculate the dark matter halo in quadrature
+        # Replace NaN with 0
+        VDM[np.isnan(VDM)] = 0
+        VDarkMat.append(VDM)
+        #RelativeError.append((Velocity - (Vgas + Vdisk + Vbulge))/(Velocity))
         radius2 = np.array(radius, dtype=np.float64)
         if each in MassDiskScale:
             value = np.where(MassDiskScale == each)
-            disc = MassDiskScale[value[0],2]                           #identifies the disk scale length to be used in normalisation
+            disc = MassDiskScale[value[0],2] #identifies the disk scale length to be used in normalisation
         radiusNormalised = radius/disc
         RadiusNormalised.append(radiusNormalised)
         RadiusArray.append(radius2)
         VelocityArray.append(velocity)
 
         #plot the rotation curve for each galaxy in the array
-        plt.plot(radius, velocity, label = each)
-        plt.xlabel("Radius(kpc)")
-        plt.ylabel("V(km/s)")
+        #plt.plot(radius, velocity, label = each)
+        #plt.xlabel("Radius(kpc)")
+        #plt.ylabel("V(km/s)")
         #plt.legend(loc=1, prop={'size': 6})
 
         #plots the normalised rotation curve for each galaxy in the array
@@ -154,28 +150,31 @@ def RotationCurve(MassArray, GalaxyName, GalaxySection):   #Created a function t
 
         
         #identifies which part of the galaxy needs plotting (disk, bulge, dark matter) or the whole rotation curve
-        if GalaxySection == "VB":
-            plt.plot(radius, VBulge, label = each)
-            plt.xlabel("Radius(kpc)")
-            plt.ylabel("V(km/s)")
-        elif GalaxySection == "VDB": 
-            plt.plot(radius, VD_G, label = each)
-            plt.xlabel("Radius(kpc)")
-            plt.ylabel("V(km/s)")
+        if GalaxySection == "VG":
+            plt.plot(radius, Vgas, label = each)
+            plt.xlabel("Radius(kpc)",fontdict={'family': 'serif', 'size': 14})
+            plt.ylabel("V(km/s)",fontdict={'family': 'serif', 'size': 14})
+                        
+        elif GalaxySection == "VBD": 
+            plt.plot(radius, VB_D, label = each)
+            plt.xlabel("Radius(kpc)", fontdict={'family': 'serif', 'size': 14})
+            plt.ylabel("V(km/s)", fontdict={'family': 'serif', 'size': 14})
+            
         elif GalaxySection == "VDM":
-            plt.plot(radius, V, label = each)
-            plt.xlabel("Radius(kpc)")
-            plt.ylabel("V(km/s)")
+            plt.plot(radius, VDM, label = each)
+            plt.xlabel("Radius(kpc)", fontdict={'family': 'serif', 'size': 14})
+            plt.ylabel("V(km/s)",fontdict={'family': 'serif', 'size': 14})
         else:
             plt.plot(radius, velocity, label = each)
-            plt.xlabel("Radius(kpc)")
-            plt.ylabel("V(km/s)")
+            plt.xlabel("Radius(kpc)", fontdict={'family': 'serif', 'size': 14})
+            plt.ylabel("V(km/s)", fontdict={'family': 'serif', 'size': 14})
+            
             
         
         
     #plt.figure()
     
-    return RadiusArray, VelocityArray, RadiusNormalised, VGas, VCombined#, VDarkMat
+    return RadiusArray, VelocityArray, RadiusNormalised, VG, VCombined, VDarkMat
 
 
 
@@ -220,22 +219,29 @@ def AverageFunction(InitialValues, Radius, Velocity, bin_size):
 
 def AverageFunctionPlotting(GalaxyMass, bin_size, maxPlus, GalaxySection):
     x = high_mass_galaxy(GalaxyMass)
-    R, V, RN, VB, VDB = RotationCurve(x, " ", GalaxySection)
+    R, V, RN, VG, VDB, VDM = RotationCurve(x, " ", GalaxySection)
     #Runs a selection statement to correctly use the right aspect of the galaxy for the averaging.
-    if GalaxySection == "VB":
+    if GalaxySection == "VG":
         x_ticks = plt.gca().get_xticks()
         X_ticks = np.delete( x_ticks, -1)
         maxValue = np.max(X_ticks)
         radius = np.linspace(0, maxValue + maxPlus, bin_size)
         bin_size = radius[1] - radius[0]
-        val, stddev, up, down = AverageFunction(radius, R, VB, bin_size)
-    elif GalaxySection == "VDB":
+        val, stddev, up, down = AverageFunction(radius, R, VG, bin_size)
+    elif GalaxySection == "VBD":
         x_ticks = plt.gca().get_xticks()
         X_ticks = np.delete( x_ticks, -1)
         maxValue = np.max(X_ticks)
         radius = np.linspace(0, maxValue + maxPlus, bin_size)
         bin_size = radius[1] - radius[0]
         val, stddev, up, down = AverageFunction(radius, R, VDB, bin_size)
+    elif GalaxySection == "VDM":
+        x_ticks = plt.gca().get_xticks()
+        X_ticks = np.delete( x_ticks, -1)
+        maxValue = np.max(X_ticks)
+        radius = np.linspace(0, maxValue + maxPlus, bin_size)
+        bin_size = radius[1] - radius[0]
+        val, stddev, up, down = AverageFunction(radius, R, VDM, bin_size)
     else:
         x_ticks = plt.gca().get_xticks()
         X_ticks = np.delete( x_ticks, -1)
@@ -272,151 +278,336 @@ def DarkMatterCalculate(Total, DiskGas, Bulge, TotalStdev, DiskGasStdDev, BulgeS
 
 
 
-LowMass, MediumMass, HighMass, SuperHighMass, LowMass2, MediumMass2, HighMass2, SuperHighMass2 = galaxy_separation(mass)
+LowMass, MediumMass, HighMass, LowMass2, MediumMass2, HighMass2 = galaxy_separation(mass)
 
-'''for each in HighMass:
-    average, radius, stddev, upper, lower = AverageFunctionPlotting(each, 20, 14)
+'''for each in MediumMass:
+    average, radius, stddev, upper, lower = AverageFunctionPlotting(each, 20, 1, "")
     radius = np.delete(radius, -1)
     plt.plot(radius, average, color = "black" ,label = "Average")
-    plt.scatter(radius, average, s = 7 ,color = "black" ,label = "Average")
+    plt.scatter(radius, average, s = 7 ,color = "black")
     plt.legend(bbox_to_anchor=(1.0, 1.0),prop={'size': 7} ,loc='upper left')
     plt.fill_between(radius, upper, lower, color="grey",alpha=0.4)
     plt.figure()'''
 
 
 
-plt.figure()
-average1, radius1, stddev1 ,upper1, lower1 = AverageFunctionPlotting(SuperHighMass2, 20, 10, "")
-radius1 = np.delete(radius1, -1)
-plt.plot(radius1,average1, color = "black",label = "Average")
-plt.scatter(radius1, average1, s = 7, color = "black")
-plt.fill_between(radius1, upper1, lower1, color="grey",alpha=0.4)
-plt.legend()
-handles, labels = plt.gca().get_legend_handles_labels()  
-lgd = dict(zip(labels, handles))
-plt.legend(lgd.values(), lgd.keys(),bbox_to_anchor=(1.0, 1.0),prop={'size': 6}, ncol =1 ,loc='upper left')
-
-
-def RotationCurveBreakDownPlot(MassType, Bin_size, Extension):
+def RotationCurveBreakDownPlot():
+    #High mass
     plt.figure()
-    average1, radius1, stddev1 ,upper1, lower1 = AverageFunctionPlotting(MassType, Bin_size, Extension, "VB")
-    radius1 = np.delete(radius1, -1)
-    plt.plot(radius1,average1, color = "black",label = "Average")
-    plt.scatter(radius1, average1, s = 7, color = "black")
-    plt.fill_between(radius1, upper1, lower1, color="grey",alpha=0.4)
-    plt.title("Bulge velocity curves")
-
-    plt.figure()
-    average2, radius2, stddev2 ,upper2, lower2 = AverageFunctionPlotting(MassType, Bin_size, Extension, "VDB")
-    radius2 = np.delete(radius2, -1)
-    plt.plot(radius2,average2, color = "black",label = "Average")
-    plt.scatter(radius2, average2, s = 7, color = "black")
-    plt.fill_between(radius2, upper2, lower2, color="grey",alpha=0.4)
-    plt.title("Disk + gas velocity curves")
+    plt.title("Total velocity")
+    averageHM, radiusHM, stddevHM ,upperHM, lowerHM = AverageFunctionPlotting(HighMass2, 25, 13, "")
+    radiusHM = np.delete(radiusHM, -1)
+    plt.plot(radiusHM,averageHM, color = "black",label = "Average")
+    plt.scatter(radiusHM, averageHM, s = 7, color = "black")
+    plt.fill_between(radiusHM, upperHM, lowerHM, color="grey",alpha=0.4)
+    plt.legend(bbox_to_anchor=(1.0, 1.0),prop={'size': 6}, ncol = 1 ,loc='upper left')
 
 
     plt.figure()
-    average4, radius4, stddev4 ,upper4, lower4 = AverageFunctionPlotting(MassType, Bin_size, Extension, "")
-    radius4 = np.delete(radius4, -1)
-    plt.plot(radius4, average4, color = "black",label = "Total")
-    plt.scatter(radius4, average4, s = 7, color = "black")
-    plt.fill_between(radius4, upper4, lower4, color="grey",alpha=0.4)
-    plt.title(" Total rotaion curves curves")
-
+    plt.title("Plot of dark matter component")
+    averageDMHM, radiusDMHM, stddevDMHM ,upperDMHM, lowerDMHM = AverageFunctionPlotting(HighMass2, 25, 13, "VDM")
+    radiusDMHM = np.delete(radiusDMHM, -1)
+    plt.plot(radiusDMHM,averageDMHM, color = "black",label = "Average")
+    plt.scatter(radiusDMHM, averageDMHM, s = 7, color = "black")
+    plt.fill_between(radiusDMHM, upperDMHM, lowerDMHM, color="grey",alpha=0.4)
+    plt.legend(bbox_to_anchor=(1.0, 1.0),prop={'size': 6}, ncol = 1 ,loc='upper left')
     
-    DM, DMStdev = DarkMatterCalculate(average4, average2, average1, stddev4, stddev2, stddev1)
+    
+    plt.figure()
+    plt.title("Plot of gas component")
+    averageVGHM, radiusVGHM, stddevVGHM ,upperVGHM, lowerVGHM = AverageFunctionPlotting(HighMass2, 25, 13, "VG")
+    radiusVGHM = np.delete(radiusVGHM, -1)
+    plt.plot(radiusVGHM,averageVGHM, color = "black",label = "Average")
+    plt.scatter(radiusVGHM, averageVGHM, s = 7, color = "black")
+    plt.fill_between(radiusVGHM, upperVGHM, lowerVGHM, color="grey",alpha=0.4)
+    plt.legend(bbox_to_anchor=(1.0, 1.0),prop={'size': 6}, ncol = 1 ,loc='upper left')
 
     
     plt.figure()
-    plt.title("Medium mass")
-    plt.xlabel("Radius(kpc)")
-    plt.ylabel("Velocity (km/s)")
+    plt.title("Plot of bulge + disk component")
+    averageVBDHM, radiusVBDHM, stddevVBDHM ,upperVBDHM, lowerVBDHM = AverageFunctionPlotting(HighMass2, 25, 13, "VBD")
+    radiusVBDHM = np.delete(radiusVBDHM, -1)
+    plt.plot(radiusVBDHM,averageVBDHM, color = "black",label = "Average")
+    plt.scatter(radiusVBDHM, averageVBDHM, s = 7, color = "black")
+    plt.fill_between(radiusVBDHM, upperVBDHM, lowerVBDHM, color="grey",alpha=0.4)
+    plt.legend(bbox_to_anchor=(1.0, 1.0),prop={'size': 6}, ncol = 1 ,loc='upper left')
+    
+    #plt.figure(1).add_axes((0,0,1,1))
+    fig = plt.figure(figsize=(7, 6))
+    gs = GridSpec(2, 1, height_ratios=[4, 1])  # Adjust height_ratios as needed
+    gs.update(hspace=0)  # Set no space between the panels
 
-    plt.plot(radius1,average1, color = "blue",label = "Bulge")
-    plt.scatter(radius1, average1, s = 7, color = "blue")
-    plt.fill_between(radius1, upper1, lower1, color="blue",alpha=0.4)
+    #Combined plot
+    ax1 = fig.add_subplot(gs[0])
+    ax1.set_xticks([])
+    #plt.xlabel("Radius(kpc)", fontdict={'family': 'serif', 'size': 14})
+    ax1.set_ylabel("Velocity(km/s)", fontdict={'family': 'serif', 'size': 14})
+    ax1.plot(radiusHM, averageHM, color = "orange",label = "Combined")
+    ax1.scatter(radiusHM, averageHM, s = 7, color = "orange")
+    ax1.fill_between(radiusHM, upperHM, lowerHM, color="orange",alpha=0.4)
+    
+    #plt.plot(radiusDMHM, averageDMHM, color = "black",label = "Dark matter")
+    #plt.scatter(radiusDMHM, averageDMHM, s = 7, color = "black")
+    #plt.fill_between(radiusDMHM, upperDMHM, lowerDMHM, color="grey",alpha=0.4)
+    
+    ax1.plot(radiusVGHM, averageVGHM, color = "blue",label = "Gas")
+    ax1.scatter(radiusVGHM, averageVGHM, s = 7, color = "blue")
+    ax1.fill_between(radiusVGHM, upperVGHM, lowerVGHM, color="blue",alpha=0.4)
+    
+    ax1.plot(radiusVBDHM, averageVBDHM, color = "brown",label = "Bulge + disk")
+    ax1.scatter(radiusVBDHM, averageVBDHM, s = 7, color = "brown")
+    ax1.fill_between(radiusVBDHM, upperVBDHM, lowerVBDHM, color="brown",alpha=0.4)
+    ax1.legend(bbox_to_anchor=(1, 1),prop={'size': 7}, ncol = 1 ,loc='upper left')
+    
+    
+    #plt.figure(1).add_axes((0,-0.2,1,0.2))
+    # Panel 2: Relative error plot (below)
+    ax2 = fig.add_subplot(gs[1], sharex=ax1)
+    ax2. set_ylabel("Relative error",fontdict={'family': 'serif', 'size': 8})
+    ax2.set_xlabel("Radius(kpc)", fontdict={'family': 'serif', 'size': 14})
+    averageHM = np.array(averageHM)
+    averageVGHM = np.array(averageVGHM)
+    averageVBDHM = np.array(averageVBDHM)
+    relativeError = (averageHM - (averageVGHM + averageVBDHM))/averageHM
+    ax2.scatter(radiusHM, relativeError, s = 10 , color = "red", label = "Relative error")
 
-    plt.plot(radius2,average2, color = "black",label = "Disk + gas")
-    plt.scatter(radius2, average2, s = 7, color = "black")
-    plt.fill_between(radius2, upper2, lower2, color="grey",alpha=0.4)
+    #plt.legend(bbox_to_anchor=(1.0, 1.0),prop={'size': 6}, ncol =1 ,loc='upper left')
 
-    plt.plot(radius4, average4, color = "brown",label = "Total")
-    plt.scatter(radius4, average4, s = 7, color = "brown")
-    plt.fill_between(radius4, upper4, lower4, color="brown",alpha=0.4)
-
-    plt.plot(radius4, DM, color = "purple",label = "Dark Matter")
-    plt.scatter(radius4, DM, s = 7, color = "purple")
-    plt.fill_between(radius4, DM + DMStdev, DM - DMStdev, color="purple",alpha=0.4)
-
-
-    return radius1, radius2, radius4, average1, average2, average4, DM, upper1, lower1, upper2, lower2, upper4, lower4, DMStdev
-
-
-
-'''R1, R2, R4, A1, A2, A4, DM, U1, L1, U2, L2, U4, L4, DMStd = RotationCurveBreakDownPlot(HighMass2, 25, 13)
-RM1, RM2, RM4, AM1, AM2, AM4, DMM, UM1, LM1, UM2, LM2, UM4, LM4, DMMStd = RotationCurveBreakDownPlot(MediumMass2, 25, 10)
-RL1, RL2, RL4, AL1, AL2, AL4, DLM, UL1, LL1, UL2, LL2, UL4, LL4, DMLStd = RotationCurveBreakDownPlot(LowMass2, 15, 2)'''
-'''plt.figure()
-plt.subplot(2,2,1)
-plt.title("High mass")
-plt.plot(R1,A1, color = "blue",label = "Bulge")
-plt.scatter(R1, A1, s = 7, color = "blue")
-plt.fill_between(R1, U1, L1, color="blue",alpha=0.4)
-
-plt.plot(R2, A2, color = "black",label = "Disk + gas")
-plt.scatter(R2, A2, s = 7, color = "black")
-plt.fill_between(R2, U2, L2, color="grey",alpha=0.4)
-
-plt.plot(R4, A4, color = "brown",label = "Total")
-plt.scatter(R4, A4, s = 7, color = "brown")
-plt.fill_between(R4, U4, L4, color="brown",alpha=0.4)
-
-plt.plot(R4, DM, color = "purple",label = "Dark Matter")
-plt.scatter(R4, DM, s = 7, color = "purple")
-plt.fill_between(R4, DM + DMStd, DM - DMStd, color="purple",alpha=0.4)
-
-
-plt.subplot(2,2,2)
-plt.title("Medium mass")
-plt.plot(RM1,AM1, color = "blue",label = "Bulge")
-plt.scatter(RM1, AM1, s = 7, color = "blue")
-plt.fill_between(RM1, UM1, LM1, color="blue",alpha=0.4)
-
-plt.plot(RM2, AM2, color = "black",label = "Disk + gas")
-plt.scatter(RM2, AM2, s = 7, color = "black")
-plt.fill_between(RM2, UM2, LM2, color="grey",alpha=0.4)
-
-plt.plot(RM4, AM4, color = "brown",label = "Total")
-plt.scatter(RM4, AM4, s = 7, color = "brown")
-plt.fill_between(RM4, UM4, LM4, color="brown",alpha=0.4)
-
-plt.plot(RM4, DMM, color = "purple",label = "Dark Matter")
-plt.scatter(RM4, DMM, s = 7, color = "purple")
-plt.fill_between(RM4, DMM + DMMStd, DMM - DMMStd, color="purple",alpha=0.4)
+    #Medium mass
+    plt.figure()
+    plt.title("Total velocity")
+    averageMM, radiusMM, stddevMM ,upperMM, lowerMM = AverageFunctionPlotting(MediumMass2, 20, 4, "")
+    radiusMM = np.delete(radiusMM, -1)
+    plt.plot(radiusMM,averageMM, color = "black",label = "Average")
+    plt.scatter(radiusMM, averageMM, s = 7, color = "black")
+    plt.fill_between(radiusMM, upperMM, lowerMM, color="grey",alpha=0.4)
+    plt.legend(bbox_to_anchor=(1.0, 1.0),prop={'size': 6}, ncol = 2 ,loc='upper left')
 
 
-plt.subplot(2,2,3)
-plt.title("Low mass")
-plt.plot(RL1,AL1, color = "blue",label = "Bulge")
-plt.scatter(RL1, AL1, s = 7, color = "blue")
-plt.fill_between(RL1, UL1, LL1, color="blue",alpha=0.4)
+    plt.figure()
+    plt.title("Plot of dark matter component")
+    averageDMMM, radiusDMMM, stddevDMMM ,upperDMMM, lowerDMMM = AverageFunctionPlotting(MediumMass2, 20, 4, "VDM")
+    radiusDMMM = np.delete(radiusDMMM, -1)
+    plt.plot(radiusDMMM,averageDMMM, color = "black",label = "Average")
+    plt.scatter(radiusDMMM, averageDMMM, s = 7, color = "black")
+    plt.fill_between(radiusDMMM, upperDMMM, lowerDMMM, color="grey",alpha=0.4)
+    plt.legend(bbox_to_anchor=(1.0, 1.0),prop={'size': 6}, ncol = 2 ,loc='upper left')
+    
+    
+    plt.figure()
+    plt.title("Plot of gas component")
+    averageVGMM, radiusVGMM, stddevVGMM ,upperVGMM, lowerVGMM = AverageFunctionPlotting(MediumMass2, 20, 4, "VG")
+    radiusVGMM = np.delete(radiusVGMM, -1)
+    plt.plot(radiusVGMM,averageVGMM, color = "black",label = "Average")
+    plt.scatter(radiusVGMM, averageVGMM, s = 7, color = "black")
+    plt.fill_between(radiusVGMM, upperVGMM, lowerVGMM, color="grey",alpha=0.4)
+    plt.legend(bbox_to_anchor=(1.0, 1.0),prop={'size': 6}, ncol = 2 ,loc='upper left')
 
-plt.plot(RL2, AL2, color = "black",label = "Disk + gas")
-plt.scatter(RL2, AL2, s = 7, color = "black")
-plt.fill_between(RL2, UL2, LL2, color="grey",alpha=0.4)
+    
+    plt.figure()
+    plt.title("Plot of bulge + disk component")
+    averageVBDMM, radiusVBDMM, stddevVBDMM ,upperVBDMM, lowerVBDMM = AverageFunctionPlotting(MediumMass2, 20, 4, "VBD")
+    radiusVBDMM = np.delete(radiusVBDMM, -1)
+    plt.plot(radiusVBDMM,averageVBDMM, color = "black",label = "Average")
+    plt.scatter(radiusVBDMM, averageVBDMM, s = 7, color = "black")
+    plt.fill_between(radiusVBDMM, upperVBDMM, lowerVBDMM, color="grey",alpha=0.4)
+    plt.legend(bbox_to_anchor=(1.0, 1.0),prop={'size': 6}, ncol = 2 ,loc='upper left')
+    
+    figCombined = plt.figure("Combined")
+    plt.xlabel("Radius(kpc)", fontdict={'family': 'serif', 'size': 14})
+    plt.ylabel("Velocity(km/s)", fontdict={'family': 'serif', 'size': 14})
+    plt.plot(radiusMM, averageMM, color = "orange",label = "Combined")
+    plt.scatter(radiusMM, averageMM, s = 7, color = "orange")
+    plt.fill_between(radiusMM, upperMM, lowerMM, color="orange",alpha=0.4)
+    
+    plt.plot(radiusDMMM, averageDMMM, color = "black",label = "Dark matter")
+    plt.scatter(radiusDMMM, averageDMMM, s = 7, color = "black")
+    plt.fill_between(radiusDMMM, upperDMMM, lowerDMMM, color="grey",alpha=0.4)
+    
+    plt.plot(radiusVGMM, averageVGMM, color = "blue",label = "Gas")
+    plt.scatter(radiusVGMM, averageVGMM, s = 7, color = "blue")
+    plt.fill_between(radiusVGMM, upperVGMM, lowerVGMM, color="blue",alpha=0.4)
+    
+    plt.plot(radiusVBDMM, averageVBDMM, color = "brown",label = "Bulge + disk")
+    plt.scatter(radiusVBDMM, averageVBDMM, s = 7, color = "brown")
+    plt.fill_between(radiusVBDMM, upperVBDMM, lowerVBDMM, color="brown",alpha=0.4)
+    plt.legend(bbox_to_anchor=(1, 1),prop={'size': 7}, ncol = 1 ,loc='upper left')
+    
+    #Low mass
+    plt.figure()
+    plt.title("Total velocity")
+    averageLM, radiusLM, stddevLM ,upperLM, lowerLM = AverageFunctionPlotting(LowMass2, 20, 1, "")
+    radiusLM = np.delete(radiusLM, -1)
+    plt.plot(radiusLM,averageLM, color = "black",label = "Average")
+    plt.scatter(radiusLM, averageLM, s = 7, color = "black")
+    plt.fill_between(radiusLM, upperLM, lowerLM, color="grey",alpha=0.4)
+    plt.legend(bbox_to_anchor=(1.0, 1.0),prop={'size': 6}, ncol = 1 ,loc='upper left')
 
-plt.plot(RL4, AL4, color = "brown",label = "Total")
-plt.scatter(RL4, AL4, s = 7, color = "brown")
-plt.fill_between(RL4, UL4, LL4, color="brown",alpha=0.4)
 
-plt.plot(RL4, DLM, color = "purple",label = "Dark Matter")
-plt.scatter(RL4, DLM, s = 7, color = "purple")
-plt.fill_between(RL4, DLM + DMLStd, DLM - DMLStd, color="purple",alpha=0.4)
-plt.tight_layout()'''
+    plt.figure()
+    plt.title("Plot of dark matter component")
+    averageDMLM, radiusDMLM, stddevDMLM ,upperDMLM, lowerDMLM = AverageFunctionPlotting(LowMass2, 20, 1, "VDM")
+    radiusDMLM = np.delete(radiusDMLM, -1)
+    plt.plot(radiusDMLM,averageDMLM, color = "black",label = "Average")
+    plt.scatter(radiusDMLM, averageDMLM, s = 7, color = "black")
+    plt.fill_between(radiusDMLM, upperDMLM, lowerDMLM, color="grey",alpha=0.4)
+    plt.legend(bbox_to_anchor=(1.0, 1.0),prop={'size': 6}, ncol = 1 ,loc='upper left')
+    
+    
+    plt.figure()
+    plt.title("Plot of gas component")
+    averageVGLM, radiusVGLM, stddevVGLM ,upperVGLM, lowerVGLM = AverageFunctionPlotting(LowMass2, 20, 1, "VG")
+    radiusVGLM = np.delete(radiusVGLM, -1)
+    plt.plot(radiusVGLM,averageVGLM, color = "black",label = "Average")
+    plt.scatter(radiusVGLM, averageVGLM, s = 7, color = "black")
+    plt.fill_between(radiusVGLM, upperVGLM, lowerVGLM, color="grey",alpha=0.4)
+    plt.legend(bbox_to_anchor=(1.0, 1.0),prop={'size': 6}, ncol = 1 ,loc='upper left')
+
+    
+    plt.figure()
+    plt.title("Plot of bulge + disk component")
+    averageVBDLM, radiusVBDLM, stddevVBDLM ,upperVBDLM, lowerVBDLM = AverageFunctionPlotting(LowMass2, 20, 1, "VBD")
+    radiusVBDLM = np.delete(radiusVBDLM, -1)
+    plt.plot(radiusVBDLM,averageVBDLM, color = "black",label = "Average")
+    plt.scatter(radiusVBDLM, averageVBDLM, s = 7, color = "black")
+    plt.fill_between(radiusVBDLM, upperVBDLM, lowerVBDLM, color="grey",alpha=0.4)
+    plt.legend(bbox_to_anchor=(1.0, 1.0),prop={'size': 6}, ncol = 1 ,loc='upper left')
+    
+    figCombined = plt.figure("Combined")
+    plt.xlabel("Radius(kpc)", fontdict={'family': 'serif', 'size': 14})
+    plt.ylabel("Velocity(km/s)", fontdict={'family': 'serif', 'size': 14})
+    plt.plot(radiusLM, averageLM, color = "orange",label = "Combined")
+    plt.scatter(radiusLM, averageLM, s = 7, color = "orange")
+    plt.fill_between(radiusLM, upperLM, lowerLM, color="orange",alpha=0.4)
+    
+    plt.plot(radiusDMLM, averageDMLM, color = "black",label = "Dark matter")
+    plt.scatter(radiusDMLM, averageDMLM, s = 7, color = "black")
+    plt.fill_between(radiusDMLM, upperDMLM, lowerDMLM, color="grey",alpha=0.4)
+    
+    plt.plot(radiusVGLM, averageVGLM, color = "blue",label = "Gas")
+    plt.scatter(radiusVGLM, averageVGLM, s = 7, color = "blue")
+    plt.fill_between(radiusVGLM, upperVGLM, lowerVGLM, color="blue",alpha=0.4)
+    
+    plt.plot(radiusVBDLM, averageVBDLM, color = "brown",label = "Bulge + disk")
+    plt.scatter(radiusVBDLM, averageVBDLM, s = 7, color = "brown")
+    plt.fill_between(radiusVBDLM, upperVBDLM, lowerVBDLM, color="brown",alpha=0.4)
+    plt.legend(bbox_to_anchor=(1, 1),prop={'size': 7}, ncol = 1 ,loc='upper left')
+
+    plt.figure()
+    plt.xlabel("Radius(kpc)", fontdict={'family': 'serif', 'size': 14})
+    plt.ylabel("Velocity(km/s)", fontdict={'family': 'serif', 'size': 14})
+    plt.plot(radiusLM, averageLM, color = "orange",label = "Low mass")
+    plt.scatter(radiusLM, averageLM, s = 7, color = "orange")
+    plt.fill_between(radiusLM, upperLM, lowerLM, color="orange",alpha=0.4)
+    
+    plt.xlabel("Radius(kpc)", fontdict={'family': 'serif', 'size': 14})
+    plt.ylabel("Velocity(km/s)", fontdict={'family': 'serif', 'size': 14})
+    plt.plot(radiusMM, averageMM, color = "green",label = "Medium mass")
+    plt.scatter(radiusMM, averageMM, s = 7, color = "green")
+    plt.fill_between(radiusMM, upperMM, lowerMM, color="green",alpha=0.4)
+
+    plt.xlabel("Radius(kpc)", fontdict={'family': 'serif', 'size': 14})
+    plt.ylabel("Velocity(km/s)", fontdict={'family': 'serif', 'size': 14})
+    plt.plot(radiusHM, averageHM, color = "red",label = "High mass")
+    plt.scatter(radiusHM, averageHM, s = 7, color = "red")
+    plt.fill_between(radiusHM, upperHM, lowerHM, color="red",alpha=0.4)
+    
+    plt.legend(bbox_to_anchor=(1, 1),prop={'size': 10}, ncol = 1 ,loc='upper left')
+    
+
+
+    fig = plt.figure(figsize=(20, 6))
+    outer_grid = GridSpec(2, 3, height_ratios=[3, 1], hspace = 0 ,figure=fig) 
+    
+    ax1 = fig.add_subplot(outer_grid[0,0])
+    ax1.set_title("High mass", pad=0)
+    ax1.set_xticks([])
+    ax1.set_ylabel("Velocity(km/s)", fontdict={'family': 'serif', 'size': 14})
+    ax1.plot(radiusHM, averageHM, color = "orange",label = "Combined")
+    ax1.scatter(radiusHM, averageHM, s = 7, color = "orange")
+    ax1.fill_between(radiusHM, upperHM, lowerHM, color="orange",alpha=0.4)
+    
+    #plt.plot(radiusDMHM, averageDMHM, color = "black",label = "Dark matter")
+    #plt.scatter(radiusDMHM, averageDMHM, s = 7, color = "black")
+    #plt.fill_between(radiusDMHM, upperDMHM, lowerDMHM, color="grey",alpha=0.4)
+    
+    ax1.plot(radiusVGHM, averageVGHM, color = "blue",label = "Gas")
+    ax1.scatter(radiusVGHM, averageVGHM, s = 7, color = "blue")
+    ax1.fill_between(radiusVGHM, upperVGHM, lowerVGHM, color="blue",alpha=0.4)
+    
+    ax1.plot(radiusVBDHM, averageVBDHM, color = "brown",label = "Bulge + disk")
+    ax1.scatter(radiusVBDHM, averageVBDHM, s = 7, color = "brown")
+    ax1.fill_between(radiusVBDHM, upperVBDHM, lowerVBDHM, color="brown",alpha=0.4)
+    #ax1.legend(bbox_to_anchor=(1, 1),prop={'size': 7}, ncol = 1 ,loc='upper left')
+    
+    #
+    ax2 = ax2 = fig.add_subplot(outer_grid[1,0])
+    ax2. set_ylabel("Relative error",fontdict={'family': 'serif', 'size': 8})
+    ax2.set_xlabel("Radius(kpc)", fontdict={'family': 'serif', 'size': 14})
+    averageHM = np.array(averageHM)
+    averageVGHM = np.array(averageVGHM)
+    averageVBDHM = np.array(averageVBDHM)
+    relativeError = (averageHM - (averageVGHM + averageVBDHM))/averageHM
+    ax2.scatter(radiusHM, relativeError, s = 10 , color = "red", label = "Relative error")
 
 
 
+    #axs[0,1].title("Medium mass")
+    #axs[0,1].xlabel("Radius(kpc)", fontdict={'family': 'serif', 'size': 7})
+    #axs[0,1].ylabel("Velocity(km/s)", fontdict={'family': 'serif', 'size': 7})
+    ax3 = fig.add_subplot(outer_grid[0,1])
+    ax3.set_title("Medium mass", pad=0)
+    ax3.plot(radiusMM, averageMM, color = "orange",label = "Combined")
+    ax3.scatter(radiusMM, averageMM, s = 7, color = "orange")
+    ax3.fill_between(radiusMM, upperMM, lowerMM, color="orange",alpha=0.4)
+    
+    ax3.plot(radiusVGMM, averageVGMM, color = "blue",label = "Gas")
+    ax3.scatter(radiusVGMM, averageVGMM, s = 7, color = "blue")
+    ax3.fill_between(radiusVGMM, upperVGMM, lowerVGMM, color="blue",alpha=0.4)
+    
+    ax3.plot(radiusVBDMM, averageVBDMM, color = "brown",label = "Bulge + disk")
+    ax3.scatter(radiusVBDMM, averageVBDMM, s = 7, color = "brown")
+    ax3.fill_between(radiusVBDMM, upperVBDMM, lowerVBDMM, color="brown",alpha=0.4)
+    #ax3.legend(bbox_to_anchor=(1, 1),prop={'size': 7}, ncol = 1 ,loc='upper left')
+    #plt.legend(bbox_to_anchor=(1, 1),prop={'size': 7}, ncol = 1 ,loc='upper left')
 
+    ax4 = fig.add_subplot(outer_grid[1,1])
+    #ax4. set_ylabel("Relative error",fontdict={'family': 'serif', 'size': 8})
+    ax4.set_xlabel("Radius(kpc)", fontdict={'family': 'serif', 'size': 14})
+    averageMM = np.array(averageMM)
+    averageVGMM = np.array(averageVGMM)
+    averageVBDMM = np.array(averageVBDMM)
+    relativeError = (averageMM - (averageVGMM + averageVBDMM))/averageMM
+    ax4.scatter(radiusMM, relativeError, s = 10 , color = "red", label = "Relative error")
+
+    ax5 = fig.add_subplot(outer_grid[0,2])
+    ax5.set_title("Low mass", pad=0)
+    ax5.plot(radiusLM, averageLM, color = "orange",label = "Combined")
+    ax5.scatter(radiusLM, averageLM, s = 7, color = "orange")
+    ax5.fill_between(radiusLM, upperLM, lowerLM, color="orange",alpha=0.4)
+    
+    ax5.plot(radiusVGLM, averageVGLM, color = "blue",label = "Gas")
+    ax5.scatter(radiusVGLM, averageVGLM, s = 7, color = "blue")
+    ax5.fill_between(radiusVGLM, upperVGLM, lowerVGLM, color="blue",alpha=0.4)
+    
+    ax5.plot(radiusVBDLM, averageVBDLM, color = "brown",label = "Bulge + disk")
+    ax5.scatter(radiusVBDLM, averageVBDLM, s = 7, color = "brown")
+    ax5.fill_between(radiusVBDLM, upperVBDLM, lowerVBDLM, color="brown",alpha=0.4)
+    ax5.legend(bbox_to_anchor=(1, 1),prop={'size': 10}, ncol = 1 ,loc='upper left')
+    #plt.legend(bbox_to_anchor=(1, 1),prop={'size': 7}, ncol = 1 ,loc='upper left')
+
+    ax6 = fig.add_subplot(outer_grid[1,2])
+    #ax6. set_ylabel("Relative error",fontdict={'family': 'serif', 'size': 8})
+    ax6.set_xlabel("Radius(kpc)", fontdict={'family': 'serif', 'size': 14})
+    averageLM = np.array(averageLM)
+    averageVGLM = np.array(averageVGLM)
+    averageVBDLM = np.array(averageVBDLM)
+    relativeError = (averageLM - (averageVGLM + averageVBDLM))/averageLM
+    ax6.scatter(radiusLM, relativeError, s = 10 , color = "red", label = "Relative error")
+
+    plt.tight_layout()
+
+RotationCurveBreakDownPlot()
 
 
 '''plt.figure()
@@ -432,33 +623,57 @@ plt.fill_between(radius2, upper2, lower2, color="grey",alpha=0.4)'''
 
 
 
-'''plt.figure()
-average3, radius3, stddev ,upper3, lower3 = AverageFunctionPlotting(LowMass2, 15, 2)
-radius3 = np.delete(radius3, -1)
-plt.plot(radius3,average3, color = "black",label = "Average")
-plt.scatter(radius3, average3, s = 7 ,color = 'black' ,label = "Average")
-plt.fill_between(radius3, upper3, lower3, color="grey",alpha=0.4)'''
+'''
+#Plot of the milky way galaxy against the averages
+
+# Define the disk scale length (in kpc)
+disk_scale_length = 2.6  # in kpc
+
+# Define the range of radii (in kpc)
+radii_kpc = np.linspace(0.1, 15, 100)  # Radii from 0.1 kpc to 15 kpc
+
+# Compute the circular velocity for each radius (in km/s)
+velocities = [vcirc(MWPotential2014, r, use_physical = True, ro = 20.0, vo = 235.0) for r in radii_kpc]
+
+# Normalize the radii by the disk scale length
+#radii_normalized = radii_kpc / disk_scale_length
+
+# Plot the rotation curve
+plt.figure(figsize=(8, 6))
+plt.xticks([0, 2,4,6,8,10,12,14,16,18,20])
+plt.plot(radii_kpc, velocities, label="Rotation Curve")
+plt.plot(radius1,average1, color = "Red",label = "Low mass")
+plt.scatter(radius1, average1, s = 7 ,color = 'Red' )
+plt.fill_between(radius1, upper1, lower1, color="grey",alpha=0.4)
+plt.plot(radius2,average2, color = "Green",label = "Medium mass")
+plt.scatter(radius2, average2, s = 7 ,color = 'Green')
+plt.fill_between(radius2, upper2, lower2, color="grey",alpha=0.4)
+plt.plot(radius3,average3, color = "Orange",label = "High mass")
+plt.scatter(radius3, average3, s = 7 ,color = 'Orange' )
+plt.fill_between(radius3, upper3, lower3, color="grey",alpha=0.4)
+
+# Customize the plot
+plt.xlabel(r"Normalized Radius $R / R_d$")
+plt.ylabel(r"Circular Velocity $v_c$ (km/s)")
+plt.title("Milky Way Rotation Curve (Normalized Radius)")
+plt.legend(bbox_to_anchor=(1.0, 1.0),prop={'size': 6}, ncol =1 ,loc='upper left')
+plt.show()
 
 
-#plt.legend(bbox_to_anchor=(1.0, 1.0),prop={'size': 6}, ncol =1 ,loc='upper left')
 
-'''Rrange = np.linspace(0, 110,10)
+
+Rrange = np.linspace(0, 110,10)
 plt.figure()
 plotRotcurve(mwp14, ro = 20.0, vo = 235.0, label = "Milky Way")
 plt.xlim(left=-1)
 plt.yticks([0, 50, 100, 150, 200, 250, 300, 350, 400])
 plt.xticks([0, 20, 40, 60, 80, 100, 120])
-plt.plot(radius1,average1, color = "Red",label = "High mass")
-plt.scatter(radius1, average1, s = 7 ,color = 'Red' )#,label = "High mass")
+plt.plot(radius1,average1, color = "Red",label = "Low mass")
+plt.scatter(radius1, average1, s = 7 ,color = 'Red' )
 plt.fill_between(radius1, upper1, lower1, color="grey",alpha=0.4)
 plt.plot(radius2,average2, color = "Green",label = "Medium mass")
-plt.scatter(radius2, average2, s = 7 ,color = 'Green' )#,label = "Medium mass")
+plt.scatter(radius2, average2, s = 7 ,color = 'Green')
 plt.fill_between(radius2, upper2, lower2, color="grey",alpha=0.4)
-plt.plot(radius3,average3, color = "Orange",label = "Low mass")
-plt.scatter(radius3, average3, s = 7 ,color = 'Orange' )#,label = "Low mass")
-plt.fill_between(radius3, upper3, lower3, color="grey",alpha=0.4)
-plt.legend()'''
-
-
-
-plt.show()
+plt.plot(radius3,average3, color = "Orange",label = "High mass")
+plt.scatter(radius3, average3, s = 7 ,color = 'Orange' )
+plt.fill_between(radius3, upper3, lower3, color="grey",alpha=0.4)'''
