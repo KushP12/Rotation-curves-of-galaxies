@@ -1,0 +1,171 @@
+# Load gas and star data
+gas = il.snapshot.loadSubhalo(basePath, 99, subhaloid, 'gas', fields=['Masses', 'Coordinates', 'Potential', 'Velocities'])
+stars = il.snapshot.loadSubhalo(basePath, 99, subhaloid, 'stars', fields=['Masses', 'Coordinates', 'Potential', 'Velocities'])
+
+def process_particle_data(particle_data, particle_type):
+    """Processes gas or star particles through all necessary steps."""
+    
+    minpotid= np.where( particle_data['Potential']==min(particle_data['Potential']) )
+
+    x_minpot=particle_data['Coordinates'][minpotid[0][0],0]
+    y_minpot=particle_data['Coordinates'][minpotid[0][0],1]
+    z_minpot=particle_data['Coordinates'][minpotid[0][0],2]
+
+
+    #print("Potential minimum coordinates=",x_minpot,y_minpot, z_minpot)
+    x = particle_data['Coordinates'][:,0]; y = particle_data['Coordinates'][:,1]; z = particle_data['Coordinates'][:,2]
+    vx = particle_data['Velocities'][:,0]; vy = particle_data['Velocities'][:,1]; vz = particle_data['Velocities'][:,2]
+
+    xx=x-x_minpot; yy=y-y_minpot; zz=z-z_minpot
+
+    # checking center of velocity at the central regions of the disk:
+
+    sphere_mask=( np.sqrt(xx*xx+yy*yy+zz*zz) < 20.0 )
+    x=xx[sphere_mask]; y=yy[sphere_mask]; z=zz[sphere_mask]
+    vx_n=vx[sphere_mask]; vy_n=vy[sphere_mask]; vz_n=vz[sphere_mask]
+    stellar_mass=particle_data['Masses'][sphere_mask]
+
+    vx_com=sum(vx_n * stellar_mass)/sum(stellar_mass)
+    vy_com=sum(vy_n * stellar_mass)/sum(stellar_mass)
+    vz_com=sum(vz_n * stellar_mass)/sum(stellar_mass)
+    #print("Original center of mass velocity=",vx_com,vy_com, vz_com)
+    vx=vx_n-vx_com
+    vy=vy_n-vy_com
+    vz=vz_n-vz_com
+    vx_com_n=sum(vx * stellar_mass)/sum(stellar_mass)
+    vy_com_n=sum(vy * stellar_mass)/sum(stellar_mass)
+    vz_com_n=sum(vz * stellar_mass)/sum(stellar_mass)
+
+    #print("Corrected center of mass velocity=",vx_com_n, vy_com_n, vz_com_n)
+    
+    # total angular momentum:-----------------------------------
+    Lx=sum(stellar_mass*(y*vz-z*vy))
+    Ly=sum(stellar_mass*(z*vx-x*vz))
+    Lz=sum(stellar_mass*(x*vy-y*vx))
+    #print("Total angular momentum= ", Lx,Ly,Lz)
+    # unit vector:----------------------------------------------
+    L_norm=np.sqrt(Lx*Lx+Ly*Ly+Lz*Lz)
+    lx=Lx/L_norm
+    ly=Ly/L_norm
+    lz=Lz/L_norm
+    #print("Direction of total angular momentum",lx,ly,lz, np.sqrt(lx*lx+ly*ly+lz*lz))
+
+    # unit vectors:
+    b=[0,0,1]  # final unit vector direction
+    a=[lx,ly,lz]  # initial max angular momentum direction
+    # definining some factors:-------------------
+    v=np.cross(a,b)
+    c=np.dot(a,b)
+    Iden=np.array([[1,0,0],[0,1,0],[0,0,1]], np.float32)  # Identify matrix
+    # definining the Skew-Symmetric matrix of vector v:---------------------
+    skew_sym_v=[[0, -v[2], v[1]],
+                [v[2], 0, -v[0]],
+                [-v[1], v[0], 0]]
+
+    skew_sym_v2=np.matmul(skew_sym_v,skew_sym_v)
+    Rot=np.add(Iden,skew_sym_v)
+    Rot2=np.add(Rot,skew_sym_v2/(1.0+c))
+    #print("Rotation matrix: \n",Rot2)
+
+#Maximising the z-component of the angular component and rotating the galaxy based on the panel above
+
+    com_disk=np.array([x_minpot, y_minpot, z_minpot], np.float32)
+    stars_coordinates_com_frame=particle_data['Coordinates']- com_disk
+
+    rotated_coordinates= (Rot2.dot(stars_coordinates_com_frame.T)).T
+    x=rotated_coordinates[:,0]; y=rotated_coordinates[:,1]; z=rotated_coordinates[:,2]
+    rotated_velocities= (Rot2.dot(particle_data['Velocities'].T)).T
+    vx=rotated_velocities[:,0]; vy=rotated_velocities[:,1]; vz=rotated_velocities[:,2]
+
+    # spherical mas chosen:
+    #sphere_mask=( (np.sqrt(x*x+y*y) < 4.5 ) & (np.sqrt(z*z)<2.0))
+    sphere_mask=( (np.sqrt(x*x+y*y+z*z)<3))
+    xx=x[sphere_mask]; yy=y[sphere_mask]; zz=z[sphere_mask]
+    vxx=vx[sphere_mask]; vyy=vy[sphere_mask]; vzz=vz[sphere_mask]
+    stellar_mass=particle_data['Masses'][sphere_mask]
+
+    Lx=sum(stellar_mass*(yy*vzz-zz*vyy))
+    Ly=sum(stellar_mass*(zz*vxx-xx*vzz))
+    Lz=sum(stellar_mass*(xx*vyy-yy*vxx))
+    #print("Total angular momentum= ", Lx,Ly,Lz)
+
+    #print("Lz is now maximum among Lx, Ly and Lz !")
+
+#Calculating the new centre of mass of velocity after rotating the galaxy
+
+    sphere_mask=( (np.sqrt(x*x+y*y)<100) & (np.sqrt(z*z)<1.5))   # not a sphere mask actually, but a cylindrical mask.
+    xx=x[sphere_mask]; yy=y[sphere_mask]; zz=z[sphere_mask]
+    vxx=vx[sphere_mask]; vyy=vy[sphere_mask]; vzz=vz[sphere_mask]
+    stellar_mass=particle_data['Masses'][sphere_mask]
+
+    vx_com=sum(vxx * stellar_mass)/sum(stellar_mass)
+    vy_com=sum(vyy * stellar_mass)/sum(stellar_mass)
+    vz_com=sum(vzz * stellar_mass)/sum(stellar_mass)
+    #print("Original center of mass velocity=",vx_com,vy_com, vz_com)
+    vxx=vxx-vx_com; vyy=vyy-vy_com;vzz=vzz-vz_com;
+
+    vx_com_n=sum(vxx * stellar_mass)/sum(stellar_mass)
+    vy_com_n=sum(vyy * stellar_mass)/sum(stellar_mass)
+    vz_com_n=sum(vzz * stellar_mass)/sum(stellar_mass)
+    #print("Corrected center of mass velocity=",vx_com_n, vy_com_n, vz_com_n)
+
+    Lx=sum(stellar_mass*(yy*vzz-zz*vyy))
+    Ly=sum(stellar_mass*(zz*vxx-xx*vzz))
+    Lz=sum(stellar_mass*(xx*vyy-yy*vxx))
+    #print("Total angular momentum= ", Lx,Ly,Lz)
+    
+#Calculation of the rotational velocity  
+    
+    G = 4.30091e-6
+    stellar_mass = (stellar_mass * 1e10)/0.6774 # conversion of mass from 10^10 Msun/h to Msun
+
+
+    # Step 1: Calculate radial distance of gas
+    radius = np.sqrt(xx**2 + yy**2 + zz**2)
+
+    # Step 2: Sort stars by radius
+    sorted_indices = np.argsort(radius)
+    radius_sorted = radius[sorted_indices]
+    stellar_mass_sorted = stellar_mass[sorted_indices]
+
+    # Step 3: Calculate cumulative enclosed mass M(r)
+    cumulative_mass = np.cumsum(stellar_mass_sorted)# Enclosed mass within radius
+
+    # Step 4: Calculate rotational velocity v_rot(r)
+    v_rot_mass_based = np.sqrt((G * cumulative_mass) / (radius_sorted + 1e-8))
+
+    # Handle cases where radius is zero to avoid division by zero
+    v_rot_mass_based[radius_sorted == 0] = 0
+
+    # Step 5: Define radial bins and average velocities
+    bin_edges1 = np.linspace(0, 50,500) 
+    bin_edges2 = np.linspace(51,100,99)  # Adjust as needed
+    bin_edges = np.concatenate((bin_edges1, bin_edges2))
+    bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+    v_rot_mean = []
+
+    for i in range(len(bin_edges) - 1):
+        bin_mask = (radius_sorted >= bin_edges[i]) & (radius_sorted < bin_edges[i+1])
+        if np.sum(bin_mask) > 0:  # Avoid empty bins
+            v_rot_mean.append(np.mean(v_rot_mass_based[bin_mask]))
+        else:
+            v_rot_mean.append(0)
+
+            
+    return bin_centers, v_rot_mean
+
+
+
+r_stars, v_stars = process_particle_data(stars, "Stars")
+r_gas, v_gas = process_particle_data(gas, "Gas")
+
+plt.figure(figsize=(8, 6))
+plt.plot(r_stars, v_stars, marker = 'o' ,label = "Stars")
+plt.plot(r_gas, v_gas, marker = 'o' ,label = "Gas")
+plt.legend()
+a = '\\ V_{circ}  (kms^{-1})'
+plt.ylabel('$%s$'%a)
+plt.xlabel("Radius (kpc)")
+yaxis = [0,50,100,150,200,250,300,350,400]
+plt.yticks(yaxis)
+plt.show()
