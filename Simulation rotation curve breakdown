@@ -1,8 +1,18 @@
-# Load gas and star data
+# Load gas, star and dark matter data
 gas = il.snapshot.loadSubhalo(basePath, 99, subhaloid, 'gas', fields=['Masses', 'Coordinates', 'Potential', 'Velocities'])
 stars = il.snapshot.loadSubhalo(basePath, 99, subhaloid, 'stars', fields=['Masses', 'Coordinates', 'Potential', 'Velocities'])
+dm = il.snapshot.loadSubhalo(basePath, 99, subhaloid, 'dm', fields=['Coordinates', 'Velocities', 'Potential'])
 
-def process_particle_data(particle_data, particle_type):
+# Load the total dark matter mass and number of particles
+all_fields = il.groupcat.loadSingle(basePath, 99, subhaloID=subhaloid)
+ptNumDark = il.snapshot.partTypeNum('dm')  # 1
+
+dm_mass_total = all_fields['SubhaloMassType'][ptNumDark] * 1e10 / 0.6774
+dm_number = all_fields['SubhaloLenType'][ptNumDark]
+dm_particle_mass = dm_mass_total / dm_number
+#print("Particle mass is: ", dm_particle_mass)
+
+def process_particle_data(particle_data, particle_type, is_dm = False):
     """Processes gas or star particles through all necessary steps."""
     
     minpotid= np.where( particle_data['Potential']==min(particle_data['Potential']) )
@@ -23,8 +33,14 @@ def process_particle_data(particle_data, particle_type):
     sphere_mask=( np.sqrt(xx*xx+yy*yy+zz*zz) < 20.0 )
     x=xx[sphere_mask]; y=yy[sphere_mask]; z=zz[sphere_mask]
     vx_n=vx[sphere_mask]; vy_n=vy[sphere_mask]; vz_n=vz[sphere_mask]
-    stellar_mass=particle_data['Masses'][sphere_mask]
-
+    #print("Length of vx:", len(vx_n))
+    if is_dm:
+        stellar_mass = np.full(len(x), dm_particle_mass)
+    else:
+        stellar_mass = particle_data['Masses'][sphere_mask]
+   
+    #stellar_mass = stellar_mass[sphere_mask]
+    #print("Length of stellar mass:", len(stellar_mass))
     vx_com=sum(vx_n * stellar_mass)/sum(stellar_mass)
     vy_com=sum(vy_n * stellar_mass)/sum(stellar_mass)
     vz_com=sum(vz_n * stellar_mass)/sum(stellar_mass)
@@ -82,8 +98,14 @@ def process_particle_data(particle_data, particle_type):
     sphere_mask=( (np.sqrt(x*x+y*y+z*z)<3))
     xx=x[sphere_mask]; yy=y[sphere_mask]; zz=z[sphere_mask]
     vxx=vx[sphere_mask]; vyy=vy[sphere_mask]; vzz=vz[sphere_mask]
-    stellar_mass=particle_data['Masses'][sphere_mask]
-
+    
+    if is_dm:
+        stellar_mass = np.full(len(xx), dm_particle_mass)
+    else:
+        stellar_mass = particle_data['Masses'][sphere_mask]
+       
+    #stellar_mass = stellar_mass[sphere_mask]
+    
     Lx=sum(stellar_mass*(yy*vzz-zz*vyy))
     Ly=sum(stellar_mass*(zz*vxx-xx*vzz))
     Lz=sum(stellar_mass*(xx*vyy-yy*vxx))
@@ -96,8 +118,12 @@ def process_particle_data(particle_data, particle_type):
     sphere_mask=( (np.sqrt(x*x+y*y)<100) & (np.sqrt(z*z)<1.5))   # not a sphere mask actually, but a cylindrical mask.
     xx=x[sphere_mask]; yy=y[sphere_mask]; zz=z[sphere_mask]
     vxx=vx[sphere_mask]; vyy=vy[sphere_mask]; vzz=vz[sphere_mask]
-    stellar_mass=particle_data['Masses'][sphere_mask]
-
+    if is_dm:
+        stellar_mass = np.full(len(xx), dm_particle_mass)
+    else:
+        stellar_mass = particle_data['Masses'][sphere_mask]
+           
+    #stellar_mass = stellar_mass[sphere_mask]
     vx_com=sum(vxx * stellar_mass)/sum(stellar_mass)
     vy_com=sum(vyy * stellar_mass)/sum(stellar_mass)
     vz_com=sum(vzz * stellar_mass)/sum(stellar_mass)
@@ -117,7 +143,8 @@ def process_particle_data(particle_data, particle_type):
 #Calculation of the rotational velocity  
     
     G = 4.30091e-6
-    stellar_mass = (stellar_mass * 1e10)/0.6774 # conversion of mass from 10^10 Msun/h to Msun
+    if is_dm == False:
+        stellar_mass = (stellar_mass * 1e10)/0.6774 # conversion of mass from 10^10 Msun/h to Msun
 
 
     # Step 1: Calculate radial distance of gas
@@ -155,13 +182,14 @@ def process_particle_data(particle_data, particle_type):
     return bin_centers, v_rot_mean
 
 
-
 r_stars, v_stars = process_particle_data(stars, "Stars")
 r_gas, v_gas = process_particle_data(gas, "Gas")
+r_dm, v_dm = process_particle_data(dm, "Dark matter", is_dm = True)
 
 plt.figure(figsize=(8, 6))
 plt.plot(r_stars, v_stars, marker = 'o' ,label = "Stars")
 plt.plot(r_gas, v_gas, marker = 'o' ,label = "Gas")
+plt.plot(r_dm, v_dm, marker = 'o', label = "Dark matter")
 plt.legend()
 a = '\\ V_{circ}  (kms^{-1})'
 plt.ylabel('$%s$'%a)
