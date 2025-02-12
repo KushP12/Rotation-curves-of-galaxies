@@ -143,9 +143,8 @@ def process_particle_data(particle_data, particle_type, is_dm = False):
 #Calculation of the rotational velocity  
     
     G = 4.30091e-6
-    if is_dm == False:
+    if not is_dm :
         stellar_mass = (stellar_mass * 1e10)/0.6774 # conversion of mass from 10^10 Msun/h to Msun
-
 
     # Step 1: Calculate radial distance of gas
     radius = np.sqrt(xx**2 + yy**2 + zz**2)
@@ -154,6 +153,7 @@ def process_particle_data(particle_data, particle_type, is_dm = False):
     sorted_indices = np.argsort(radius)
     radius_sorted = radius[sorted_indices]
     stellar_mass_sorted = stellar_mass[sorted_indices]
+
 
     # Step 3: Calculate cumulative enclosed mass M(r)
     cumulative_mass = np.cumsum(stellar_mass_sorted)# Enclosed mass within radius
@@ -170,26 +170,73 @@ def process_particle_data(particle_data, particle_type, is_dm = False):
     bin_edges = np.concatenate((bin_edges1, bin_edges2))
     bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
     v_rot_mean = []
+    mass_profile = []
 
     for i in range(len(bin_edges) - 1):
         bin_mask = (radius_sorted >= bin_edges[i]) & (radius_sorted < bin_edges[i+1])
         if np.sum(bin_mask) > 0:  # Avoid empty bins
             v_rot_mean.append(np.mean(v_rot_mass_based[bin_mask]))
+            mass_profile.append(np.sum(stellar_mass_sorted[bin_mask]))
         else:
             v_rot_mean.append(0)
 
-            
-    return bin_centers, v_rot_mean
+    return bin_centers, v_rot_mean, mass_profile
+
+def process_combined_rotation_curve(gas_data, stars_data, dm_data):
+    """Processes all components (gas, stars, and dark matter) to compute a single rotation curve based on total mass."""
+    
+    # Process each component separately to extract necessary quantities
+    gas_r, gas_v ,gas_mass = process_particle_data(gas_data, 'Gas')
+    stars_r,stars_v ,stars_mass = process_particle_data(stars_data, 'Stars')
+    dm_r, dm_v ,dm_mass = process_particle_data(dm_data, 'Dark Matter', is_dm=True)
+    
+    
+    min_length = min(len(gas_r), len(gas_mass))
+    gas_r, gas_mass = gas_r[:min_length], gas_mass[:min_length]
+
+    
+    # Define common radial bins (assume same for all, adjust if needed)
+    common_r = np.linspace(0, 100, 599)  # Adjust binning as necessary
+    
+    # Interpolate masses to align bins
+    gas_interp = interp1d(gas_r, gas_mass, bounds_error=False, fill_value=0)
+    stars_interp = interp1d(stars_r, stars_mass, bounds_error=False, fill_value=0)
+    dm_interp = interp1d(dm_r, dm_mass, bounds_error=False, fill_value=0)
+    
+    gas_mass_new = gas_interp(common_r)
+    stars_mass_new = stars_interp(common_r)
+    dm_mass_new = dm_interp(common_r)
+    
+    # Compute total mass in each radial bin
+    total_mass = gas_mass_new + stars_mass_new + dm_mass_new
 
 
-r_stars, v_stars = process_particle_data(stars, "Stars")
-r_gas, v_gas = process_particle_data(gas, "Gas")
-r_dm, v_dm = process_particle_data(dm, "Dark matter", is_dm = True)
+
+    # Compute cumulative enclosed mass
+    cumulative_mass = np.cumsum(total_mass)
+    
+    # Compute total rotational velocity using the total enclosed mass
+    G = 4.30091e-6  # Gravitational constant in appropriate units
+    v_combined = np.sqrt((G * cumulative_mass) / (common_r + 1e-8))
+    print(len(v_combined))
+    
+    return common_r, v_combined
+
+total_r, combined_v = process_combined_rotation_curve(gas, stars, dm)
+
+r_stars, v_stars, m_stars = process_particle_data(stars, "Stars")
+r_gas, v_gas, m_gas = process_particle_data(gas, "Gas")
+r_dm, v_dm, m_dm = process_particle_data(dm, "Dark matter", is_dm = True)
+
+v_total = np.sqrt((np.array(v_stars))**2 + (np.array(v_gas))**2 + (np.array(v_dm))**2)
+
 
 plt.figure(figsize=(8, 6))
 plt.plot(r_stars, v_stars, marker = 'o' ,label = "Stars")
 plt.plot(r_gas, v_gas, marker = 'o' ,label = "Gas")
 plt.plot(r_dm, v_dm, marker = 'o', label = "Dark matter")
+#plt.plot(total_r, combined_v, marker = 'o', label = "Combined")
+plt.plot(r_stars, v_total, marker = 'o', label = "Quad")
 plt.legend()
 a = '\\ V_{circ}  (kms^{-1})'
 plt.ylabel('$%s$'%a)
