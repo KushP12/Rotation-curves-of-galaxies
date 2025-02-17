@@ -1,0 +1,87 @@
+#Average rotation curve calculator:
+
+total_rotation_curve = []
+stars_rotation_curve = []
+gas_rotation_curve = []
+dm_rotation_curve = []
+
+for each in sample_galaxy_id:
+    subhaloid = each
+    print(subhaloid)
+    gas = il.snapshot.loadSubhalo(basePath, 99, subhaloid, 'gas', fields=['Masses', 'Coordinates', 'Potential', 'Velocities'])
+    stars = il.snapshot.loadSubhalo(basePath, 99, subhaloid, 'stars', fields=['Masses', 'Coordinates', 'Potential', 'Velocities'])
+    dm = il.snapshot.loadSubhalo(basePath, 99, subhaloid, 'dm', fields=['Coordinates', 'Velocities', 'Potential'])
+
+    # Load the total dark matter mass and number of particles
+    all_fields = il.groupcat.loadSingle(basePath, 99, subhaloID=subhaloid)
+    ptNumDark = il.snapshot.partTypeNum('dm')  # 1
+
+    dm_mass_total = all_fields['SubhaloMassType'][ptNumDark] * 1e10 / 0.6774
+    dm_number = all_fields['SubhaloLenType'][ptNumDark]
+    dm_particle_mass = dm_mass_total / dm_number
+    
+    total_r, combined_v = process_combined_rotation_curve(gas, stars, dm)
+    r_stars, v_stars, s_mass = process_particle_data(stars, "Stars")
+    r_gas, v_gas, g_mass = process_particle_data(gas, "Gas")
+    r_dm, v_dm, dm_mass = process_particle_data(dm, "Dark matter", is_dm = True)
+    
+    #if (len(r_stars) == len(s_mass)) and (len(r_gas) == len(g_mass)) and (len(r_dm) == len(dm_mass)):
+    #    total_rotation_curve.append(combined_v)
+    #    stars_rotation_curve.append(v_stars)
+    #    gas_rotation_curve.append(v_gas)
+    #    dm_rotation_curve.append(v_dm)
+    
+    total_rotation_curve.append(combined_v)
+    stars_rotation_curve.append(v_stars)
+    gas_rotation_curve.append(v_gas)
+    dm_rotation_curve.append(v_dm)
+    
+
+average_rotation_curve_total = np.mean(total_rotation_curve, axis = 0)
+std_rotation_total = np.std(total_rotation_curve, axis = 0)
+
+average_rotation_curve_stars = np.mean(stars_rotation_curve, axis = 0)
+std_rotation_stars = np.std(stars_rotation_curve, axis = 0)
+
+average_rotation_curve_gas = np.mean(gas_rotation_curve, axis = 0)
+std_rotation_gas = np.std(gas_rotation_curve, axis = 0)
+
+average_rotation_curve_dm = np.mean(dm_rotation_curve, axis = 0)
+std_rotation_dm = np.std(dm_rotation_curve, axis = 0)
+
+radius_values = np.linspace(0, 20, 79)
+radius_values_total = np.linspace(0, 20, 80)
+
+plt.plot(radius_values_total, average_rotation_curve_total, color = "blue" ,label = "total")
+plt.fill_between(radius_values_total, 
+                 average_rotation_curve_total - std_rotation_total, 
+                 average_rotation_curve_total + std_rotation_total, 
+                 color='blue', alpha=0.2)
+
+
+plt.plot(radius_values, average_rotation_curve_stars, color = "orange", label = "stars")
+plt.fill_between(radius_values, 
+                 average_rotation_curve_stars - std_rotation_stars, 
+                 average_rotation_curve_stars + std_rotation_stars, 
+                 color='orange', alpha=0.2)
+
+plt.plot(radius_values, average_rotation_curve_gas, color = "green" ,label = "gas")
+plt.fill_between(radius_values, 
+                 average_rotation_curve_gas - std_rotation_gas, 
+                 average_rotation_curve_gas + std_rotation_gas, 
+                 color='green', alpha=0.2)
+
+plt.plot(radius_values, average_rotation_curve_dm, color = "red", label = "dm")
+plt.fill_between(radius_values, 
+                 average_rotation_curve_dm - std_rotation_dm, 
+                 average_rotation_curve_dm + std_rotation_dm, 
+                 color='red', alpha=0.2)
+
+
+plt.legend()
+a = '\\ V_{circ}  (kms^{-1})'
+plt.ylabel('$%s$'%a)
+plt.xlabel("Radius (kpc)")
+plt.show()
+
+    
