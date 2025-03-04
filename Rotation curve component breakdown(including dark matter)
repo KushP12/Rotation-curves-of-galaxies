@@ -1,0 +1,195 @@
+#Dark matter model calculation
+import os
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
+import warnings
+
+def rho(p, R):
+    return p["ps"] / ((R / p["rs"]) * (1 + np.square(R / p["rs"])))
+
+def M(p, R):
+    return 4 * np.pi * np.power(cn.kpc_to_pc(p["rs"]), 3) * p["ps"] * (np.log((R + p["rs"]) / p["rs"]) - (R / (R + p["rs"])))
+
+def g(p, R):
+    return p["G"] * M(p, R) / (R * cn.kpc_to_km(R))
+
+def Vrot(p, R):
+    return (np.sqrt(g(p, R) * cn.kpc_to_km(R)))
+
+# Suppress warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+
+# Constants
+FILE_LOCATION = "Maximum disk galaxy data without NGC.xlsx"
+FOLDER_PATH = '/cosma/home/durham/dc-pand2/Rodmod_LTG2'
+
+# Load data
+def load_data(file_location):
+    df_mass = pd.read_excel(file_location, sheet_name='Sheet1', usecols="B")
+    df_mass_names = pd.read_excel(file_location, sheet_name='Sheet1', usecols="A, B")
+    df_mass_disk_scale = pd.read_excel(file_location, sheet_name='Sheet1', usecols="A, B, R")
+    
+    mass = df_mass.to_numpy().flatten()
+    mass_names = df_mass_names.to_numpy()
+    mass_disk_scale = df_mass_disk_scale.to_numpy()
+    
+    return mass, mass_names, mass_disk_scale
+
+# Galaxy separation
+def galaxy_separation(mass):
+    low_mass = mass[mass < 5e10]
+    medium_mass = mass[(mass >= 1e10) & (mass < 1e11)]
+    high_mass = mass[mass >= 1e11]
+    
+    return low_mass, medium_mass, high_mass
+
+# Load galaxy data
+def load_galaxy_data(file_name):
+    file_path = os.path.join(FOLDER_PATH, file_name)
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"File not found: {file_path}")
+    
+    data = np.loadtxt(file_path)
+    radius, velocity, v_gas, v_disk, v_bulge = data[:, 0], data[:, 1], data[:, 3], data[:, 4], data[:, 7]
+    return radius, velocity, v_gas, v_disk, v_bulge
+
+def NFWdata(file_name, index):
+    folder_path = '/cosma/home/durham/dc-pand2/Fits'
+    file_path = os.path.join(folder_path, file_name)
+    array_data = np.loadtxt(file_path)
+    ps = 10**(array_data[index][14])
+    rs = array_data[index][12]
+    DiskM2L = array_data[index][0]
+    v200 = array_data[index][8]
+    c200 = array_data[index][10]
+    
+    return rs, ps, DiskM2L, v200, c200
+
+def calculate_dark_matter_component(galaxy_name, radius, rs, ps):
+    p = {"ps": ps, "rs": rs, "G": 4.302}  # Gravitational constant value in proper units
+    v_rot_dm = []
+    
+    for r in radius:
+        if r == 0:
+            v_rot_dm.append(0)
+        else:
+            mass = M(p, r)
+            g_val = g(p, r)
+            v_rot_dm.append((np.sqrt(g_val * (r*3.086e+16)))/1000)
+    
+    return np.array(v_rot_dm)
+
+def calculate_average_rotation_curve_with_dm(galaxy_names, mass_disk_scale, bin_size=20):
+    radius_all, velocity_all, v_gas_all, v_disk_all, v_bulge_all, v_dm_all = [], [], [], [], [], []
+    
+    for galaxy_name in galaxy_names:
+        file_extension = f"{galaxy_name}.txt"
+        try:
+            radius, velocity, v_gas, v_disk, v_bulge = load_galaxy_data(file_extension)
+            rs, ps, _, _, _ = NFWdata(f"{galaxy_name}.mrt", 2)
+            v_dm = calculate_dark_matter_component(galaxy_name, radius, rs, ps)
+            disk_scale = mass_disk_scale[mass_disk_scale[:, 0] == galaxy_name][0, 2]
+            radius_norm = radius / disk_scale
+            
+            radius_all.append(radius_norm)
+            velocity_all.append(velocity)
+            v_gas_all.append(v_gas)
+            v_disk_all.append(v_disk)
+            v_bulge_all.append(v_bulge)
+            v_dm_all.append(v_dm)
+        
+        except FileNotFoundError as e:
+            print(f"Skipping {galaxy_name}: {e}")
+    
+    max_radius = max([max(r) for r in radius_all])
+    bins = np.linspace(0, max_radius, bin_size)
+    bin_centers = (bins[:-1] + bins[1:]) / 2
+    
+    avg_velocity, avg_v_gas, avg_v_disk, avg_v_bulge, avg_v_dm = [], [], [], [], []
+    std_velocity, std_v_gas, std_v_disk, std_v_bulge, std_v_dm = [], [], [], [], []
+    
+    for i in range(len(bins) - 1):
+        lower, upper = bins[i], bins[i + 1]
+        velocity_bin, v_gas_bin, v_disk_bin, v_bulge_bin, v_dm_bin = [], [], [], [], []
+        
+        for j in range(len(radius_all)):
+            mask = (radius_all[j] >= lower) & (radius_all[j] < upper)
+            velocity_bin.extend(velocity_all[j][mask])
+            v_gas_bin.extend(v_gas_all[j][mask])
+            v_disk_bin.extend(v_disk_all[j][mask])
+            v_bulge_bin.extend(v_bulge_all[j][mask])
+            v_dm_bin.extend(v_dm_all[j][mask])
+        
+        if velocity_bin:
+            avg_velocity.append(np.mean(velocity_bin))
+            std_velocity.append(np.std(velocity_bin))
+        if v_gas_bin:
+            avg_v_gas.append(np.mean(v_gas_bin))
+            std_v_gas.append(np.std(v_gas_bin))
+        if v_disk_bin:
+            avg_v_disk.append(np.mean(v_disk_bin))
+            std_v_disk.append(np.std(v_disk_bin))
+        if v_bulge_bin:
+            avg_v_bulge.append(np.mean(v_bulge_bin))
+            std_v_bulge.append(np.std(v_bulge_bin))
+        if v_dm_bin:
+            avg_v_dm.append(np.mean(v_dm_bin))
+            std_v_dm.append(np.std(v_dm_bin))
+    
+    return bin_centers, avg_velocity, avg_v_gas, avg_v_disk, avg_v_bulge, avg_v_dm, std_velocity, std_v_gas, std_v_disk, std_v_bulge, std_v_dm
+
+def plot_rotation_curves_with_dm(ax, bin_centers, avg_velocity, avg_v_gas, avg_v_disk, avg_v_bulge, avg_v_dm, std_velocity, std_v_gas, std_v_disk, std_v_bulge, std_v_dm, title):
+    ax.plot(bin_centers[:len(avg_velocity)], avg_velocity, label="Observed", color="black")
+    ax.fill_between(bin_centers[:len(avg_velocity)], np.array(avg_velocity) - np.array(std_velocity), np.array(avg_velocity) + np.array(std_velocity), color="gray", alpha=0.3)
+    
+    ax.plot(bin_centers[:len(avg_v_gas)], avg_v_gas, label="Gas", color="blue")
+    ax.fill_between(bin_centers[:len(avg_v_gas)], np.array(avg_v_gas) - np.array(std_v_gas), np.array(avg_v_gas) + np.array(std_v_gas), color="blue", alpha=0.2)
+    
+    ax.plot(bin_centers[:len(avg_v_disk)], avg_v_disk, label="Disk", color="green")
+    ax.fill_between(bin_centers[:len(avg_v_disk)], np.array(avg_v_disk) - np.array(std_v_disk), np.array(avg_v_disk) + np.array(std_v_disk), color="green", alpha=0.2)
+    
+    ax.plot(bin_centers[:len(avg_v_bulge)], avg_v_bulge, label="Bulge", color="red")
+    ax.fill_between(bin_centers[:len(avg_v_bulge)], np.array(avg_v_bulge) - np.array(std_v_bulge), np.array(avg_v_bulge) + np.array(std_v_bulge), color="red", alpha=0.2)
+    
+    ax.plot(bin_centers[:len(avg_v_dm)], avg_v_dm, label="Dark Matter", color="purple")
+    ax.fill_between(bin_centers[:len(avg_v_dm)], np.array(avg_v_dm) - np.array(std_v_dm), np.array(avg_v_dm) + np.array(std_v_dm), color="purple", alpha=0.2)
+
+    ax.plot(bin_centers[:len(avg_v_dm)], np.sqrt(np.array(avg_v_dm)**2 + np.array(avg_v_bulge)**2 + np.array(avg_v_disk)**2 + np.array(avg_v_gas)**2), label = "Total") 
+    
+    ax.set_xlabel("Radius (kpc)", fontsize=22)
+    ax.set_ylabel("Velocity (km/s)", fontsize=22)
+    ax.set_title(title, fontsize=16)
+    
+
+# Main function update
+def main():
+    mass, mass_names, mass_disk_scale = load_data(FILE_LOCATION)
+    low_mass, medium_mass, high_mass = galaxy_separation(mass)
+    
+    low_mass_names = mass_names[np.isin(mass_names[:, 1], low_mass)][:, 0]
+    medium_mass_names = mass_names[np.isin(mass_names[:, 1], medium_mass)][:, 0]
+    high_mass_names = mass_names[np.isin(mass_names[:, 1], high_mass)][:, 0]
+    
+    # Create a single figure with three subplots
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    
+    # Low mass galaxies
+    bin_centers, avg_velocity, avg_v_gas, avg_v_disk, avg_v_bulge, avg_v_dm, std_velocity, std_v_gas, std_v_disk, std_v_bulge, std_v_dm = calculate_average_rotation_curve_with_dm(low_mass_names, mass_disk_scale)
+    plot_rotation_curves_with_dm(axes[0], bin_centers, avg_velocity, avg_v_gas, avg_v_disk, avg_v_bulge, avg_v_dm, std_velocity, std_v_gas, std_v_disk, std_v_bulge, std_v_dm, "Low Mass Galaxies")
+    
+    # Medium mass galaxies
+    bin_centers, avg_velocity, avg_v_gas, avg_v_disk, avg_v_bulge, avg_v_dm, std_velocity, std_v_gas, std_v_disk, std_v_bulge, std_v_dm = calculate_average_rotation_curve_with_dm(medium_mass_names, mass_disk_scale)
+    plot_rotation_curves_with_dm(axes[1], bin_centers, avg_velocity, avg_v_gas, avg_v_disk, avg_v_bulge, avg_v_dm, std_velocity, std_v_gas, std_v_disk, std_v_bulge, std_v_dm, "Medium Mass Galaxies")
+    
+    # High mass galaxies
+    bin_centers, avg_velocity, avg_v_gas, avg_v_disk, avg_v_bulge, avg_v_dm, std_velocity, std_v_gas, std_v_disk, std_v_bulge, std_v_dm = calculate_average_rotation_curve_with_dm(high_mass_names, mass_disk_scale)
+    plot_rotation_curves_with_dm(axes[2], bin_centers, avg_velocity, avg_v_gas, avg_v_disk, avg_v_bulge, avg_v_dm, std_velocity, std_v_gas, std_v_disk, std_v_bulge, std_v_dm, "High Mass Galaxies")
+    
+    plt.tight_layout()
+    plt.legend(bbox_to_anchor=(1.0, 1.0),prop={'size': 17}, ncol =1 ,loc='upper left')
+    plt.show()
+
+if __name__ == "__main__":
+    main()
