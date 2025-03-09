@@ -1,30 +1,33 @@
-# Load gas, star and dark matter data
-gas = il.snapshot.loadSubhalo(basePath, 99, subhaloid, 'gas', fields=['Masses', 'Coordinates', 'Potential', 'Velocities'])
-stars = il.snapshot.loadSubhalo(basePath, 99, subhaloid, 'stars', fields=['Masses', 'Coordinates', 'Potential', 'Velocities'])
-dm = il.snapshot.loadSubhalo(basePath, 99, subhaloid, 'dm', fields=['Coordinates', 'Velocities', 'Potential'])
+basePath = '/home/tnguser/sims.TNG/TNG50-1/output/'
+def rotation_curve_breakdown(subhaloID):
+    subhaloid = subhaloID
+    gas = il.snapshot.loadSubhalo(basePath, 99, subhaloid, 'gas', fields=['Masses', 'Coordinates', 'Potential', 'Velocities'])
+    stars = il.snapshot.loadSubhalo(basePath, 99, subhaloid, 'stars', fields=['Masses', 'Coordinates', 'Potential', 'Velocities'])
+    dm = il.snapshot.loadSubhalo(basePath, 99, subhaloid, 'dm', fields=['Coordinates', 'Velocities', 'Potential'])
 
-# Load the total dark matter mass and number of particles
-all_fields = il.groupcat.loadSingle(basePath, 99, subhaloID=subhaloid)
-ptNumDark = il.snapshot.partTypeNum('dm')  # 1
+    # Load the total dark matter mass and number of particles
+    all_fields = il.groupcat.loadSingle(basePath, 99, subhaloID=subhaloid)
+    ptNumDark = il.snapshot.partTypeNum('dm')  # 1
 
-dm_mass_total = all_fields['SubhaloMassType'][ptNumDark] * 1e10 / 0.6774
-dm_number = all_fields['SubhaloLenType'][ptNumDark]
-dm_particle_mass = dm_mass_total / dm_number
-#print("Particle mass is: ", dm_particle_mass)
 
-def process_particle_data(particle_data, particle_type, is_dm = False):
+    dm_mass_total = all_fields['SubhaloMassType'][ptNumDark] * 1e10 / 0.6774
+    dm_number = all_fields['SubhaloLenType'][ptNumDark]
+    dm_particle_mass = dm_mass_total / dm_number
+    print("Particle mass is: ", dm_particle_mass)
+
+
     """Processes gas or star particles through all necessary steps."""
-    
-    minpotid= np.where( particle_data['Potential']==min(particle_data['Potential']) )
 
-    x_minpot=particle_data['Coordinates'][minpotid[0][0],0]
-    y_minpot=particle_data['Coordinates'][minpotid[0][0],1]
-    z_minpot=particle_data['Coordinates'][minpotid[0][0],2]
+    minpotid= np.where( stars['Potential']==min(stars['Potential']) )
+
+    x_minpot=stars['Coordinates'][minpotid[0][0],0]
+    y_minpot=stars['Coordinates'][minpotid[0][0],1]
+    z_minpot=stars['Coordinates'][minpotid[0][0],2]
 
 
     #print("Potential minimum coordinates=",x_minpot,y_minpot, z_minpot)
-    x = particle_data['Coordinates'][:,0]; y = particle_data['Coordinates'][:,1]; z = particle_data['Coordinates'][:,2]
-    vx = particle_data['Velocities'][:,0]; vy = particle_data['Velocities'][:,1]; vz = particle_data['Velocities'][:,2]
+    x = stars['Coordinates'][:,0]; y = stars['Coordinates'][:,1]; z = stars['Coordinates'][:,2]
+    vx = stars['Velocities'][:,0]; vy = stars['Velocities'][:,1]; vz = stars['Velocities'][:,2]
 
     xx=x-x_minpot; yy=y-y_minpot; zz=z-z_minpot
 
@@ -34,11 +37,9 @@ def process_particle_data(particle_data, particle_type, is_dm = False):
     x=xx[sphere_mask]; y=yy[sphere_mask]; z=zz[sphere_mask]
     vx_n=vx[sphere_mask]; vy_n=vy[sphere_mask]; vz_n=vz[sphere_mask]
     #print("Length of vx:", len(vx_n))
-    if is_dm:
-        stellar_mass = np.full(len(x), dm_particle_mass)
-    else:
-        stellar_mass = particle_data['Masses'][sphere_mask]
-   
+
+    stellar_mass = stars['Masses'][sphere_mask]
+
     #stellar_mass = stellar_mass[sphere_mask]
     #print("Length of stellar mass:", len(stellar_mass))
     vx_com=sum(vx_n * stellar_mass)/sum(stellar_mass)
@@ -53,7 +54,7 @@ def process_particle_data(particle_data, particle_type, is_dm = False):
     vz_com_n=sum(vz * stellar_mass)/sum(stellar_mass)
 
     #print("Corrected center of mass velocity=",vx_com_n, vy_com_n, vz_com_n)
-    
+
     # total angular momentum:-----------------------------------
     Lx=sum(stellar_mass*(y*vz-z*vy))
     Ly=sum(stellar_mass*(z*vx-x*vz))
@@ -83,164 +84,174 @@ def process_particle_data(particle_data, particle_type, is_dm = False):
     Rot2=np.add(Rot,skew_sym_v2/(1.0+c))
     #print("Rotation matrix: \n",Rot2)
 
-#Maximising the z-component of the angular component and rotating the galaxy based on the panel above
-
+    #Maximising the z-component of the angular component and rotating the galaxy based on the panel above
     com_disk=np.array([x_minpot, y_minpot, z_minpot], np.float32)
-    stars_coordinates_com_frame=particle_data['Coordinates']- com_disk
+    stars_coordinates_com_frame=stars['Coordinates'] - com_disk
+    gas_coordinates_com_frame = gas['Coordinates'] - com_disk
+    dm_coordinates_com_frame = dm['Coordinates'] - com_disk
 
     rotated_coordinates= (Rot2.dot(stars_coordinates_com_frame.T)).T
-    x=rotated_coordinates[:,0]; y=rotated_coordinates[:,1]; z=rotated_coordinates[:,2]
-    rotated_velocities= (Rot2.dot(particle_data['Velocities'].T)).T
-    vx=rotated_velocities[:,0]; vy=rotated_velocities[:,1]; vz=rotated_velocities[:,2]
+    x_stars=rotated_coordinates[:,0]; y_stars=rotated_coordinates[:,1]; z_stars=rotated_coordinates[:,2]
+    rotated_velocities= (Rot2.dot(stars['Velocities'].T)).T
+    vx_stars=rotated_velocities[:,0]; vy_stars=rotated_velocities[:,1]; vz_stars=rotated_velocities[:,2]
 
-    # spherical mas chosen:
-    #sphere_mask=( (np.sqrt(x*x+y*y) < 4.5 ) & (np.sqrt(z*z)<2.0))
-    sphere_mask=( (np.sqrt(x*x+y*y+z*z)<3))
-    xx=x[sphere_mask]; yy=y[sphere_mask]; zz=z[sphere_mask]
-    vxx=vx[sphere_mask]; vyy=vy[sphere_mask]; vzz=vz[sphere_mask]
-    
-    if is_dm:
-        stellar_mass = np.full(len(xx), dm_particle_mass)
-    else:
-        stellar_mass = particle_data['Masses'][sphere_mask]
-       
-    #stellar_mass = stellar_mass[sphere_mask]
-    
-    Lx=sum(stellar_mass*(yy*vzz-zz*vyy))
-    Ly=sum(stellar_mass*(zz*vxx-xx*vzz))
-    Lz=sum(stellar_mass*(xx*vyy-yy*vxx))
-    #print("Total angular momentum= ", Lx,Ly,Lz)
 
-    #print("Lz is now maximum among Lx, Ly and Lz !")
+    rotated_coordinates= (Rot2.dot(gas_coordinates_com_frame.T)).T
+    x_gas=rotated_coordinates[:,0]; y_gas=rotated_coordinates[:,1]; z_gas=rotated_coordinates[:,2]
+    rotated_velocities= (Rot2.dot(gas['Velocities'].T)).T
+    vx_gas=rotated_velocities[:,0]; vy_gas=rotated_velocities[:,1]; vz_gas=rotated_velocities[:,2]
 
-#Calculating the new centre of mass of velocity after rotating the galaxy
 
-    sphere_mask=( (np.sqrt(x*x+y*y)<100) & (np.sqrt(z*z)<1.5))   # not a sphere mask actually, but a cylindrical mask.
-    xx=x[sphere_mask]; yy=y[sphere_mask]; zz=z[sphere_mask]
-    vxx=vx[sphere_mask]; vyy=vy[sphere_mask]; vzz=vz[sphere_mask]
-    if is_dm:
-        stellar_mass = np.full(len(xx), dm_particle_mass)
-    else:
-        stellar_mass = particle_data['Masses'][sphere_mask]
-           
-    #stellar_mass = stellar_mass[sphere_mask]
-    vx_com=sum(vxx * stellar_mass)/sum(stellar_mass)
-    vy_com=sum(vyy * stellar_mass)/sum(stellar_mass)
-    vz_com=sum(vzz * stellar_mass)/sum(stellar_mass)
-    #print("Original center of mass velocity=",vx_com,vy_com, vz_com)
-    vxx=vxx-vx_com; vyy=vyy-vy_com;vzz=vzz-vz_com;
+    rotated_coordinates= (Rot2.dot(dm_coordinates_com_frame.T)).T
+    x_dm=rotated_coordinates[:,0]; y_dm=rotated_coordinates[:,1]; z_dm=rotated_coordinates[:,2]
+    rotated_velocities= (Rot2.dot(dm['Velocities'].T)).T
+    vx_dm=rotated_velocities[:,0]; vy_dm=rotated_velocities[:,1]; vz_dm=rotated_velocities[:,2]
 
-    vx_com_n=sum(vxx * stellar_mass)/sum(stellar_mass)
-    vy_com_n=sum(vyy * stellar_mass)/sum(stellar_mass)
-    vz_com_n=sum(vzz * stellar_mass)/sum(stellar_mass)
-    #print("Corrected center of mass velocity=",vx_com_n, vy_com_n, vz_com_n)
 
-    Lx=sum(stellar_mass*(yy*vzz-zz*vyy))
-    Ly=sum(stellar_mass*(zz*vxx-xx*vzz))
-    Lz=sum(stellar_mass*(xx*vyy-yy*vxx))
-    #print("Total angular momentum= ", Lx,Ly,Lz)
-    
-#Calculation of the rotational velocity  
-    
+    stellar_mass_stars = stars['Masses']
+    stellar_mass_gas = gas['Masses']
+
+
+
+
+    #Calculation of the rotational velocity  
+
     G = 4.30091e-6
-    if not is_dm :
-        stellar_mass = (stellar_mass * 1e10)/0.6774 # conversion of mass from 10^10 Msun/h to Msun
+    stellar_mass_stars = (stellar_mass_stars * 1e10)/0.6774 # conversion of mass from 10^10 Msun/h to Msun
+    stellar_mass_gas = (stellar_mass_gas * 1e10)/0.6774 # conversion of mass from 10^10 Msun/h to Msun
+    #stellar_mass_ = (stellar_mass_stars * 1e10)/0.6774 # conversion of mass from 10^10 Msun/h to Msun
+
 
     # Step 1: Calculate radial distance of gas
-    radius = np.sqrt(xx**2 + yy**2 + zz**2)
-
-    # Step 2: Sort stars by radius
-    sorted_indices = np.argsort(radius)
-    radius_sorted = radius[sorted_indices]
-    stellar_mass_sorted = stellar_mass[sorted_indices]
+    radius_stars = np.sqrt(x_stars**2 + y_stars**2 + z_stars**2)
+    radius_gas = np.sqrt(x_gas**2 + y_gas**2 + z_gas**2)
+    radius_dm = np.sqrt(x_dm**2 + y_dm**2 + z_dm**2)
 
 
-    # Step 3: Calculate cumulative enclosed mass M(r)
-    cumulative_mass = np.cumsum(stellar_mass_sorted)# Enclosed mass within radius
 
-    # Step 4: Calculate rotational velocity v_rot(r)
-    v_rot_mass_based = np.sqrt((G * cumulative_mass) / (radius_sorted + 1e-8))
+    rad_values = np.linspace(0,17,50)
+    #mass = np.zeros_like(rad_values)
+    mass_stars = []
+    mass_gas = []
+    mass_dm = []
+    mass_total = []
 
-    # Handle cases where radius is zero to avoid division by zero
-    v_rot_mass_based[radius_sorted == 0] = 0
+    for i in rad_values:
+        mass_sel = stellar_mass_stars[(radius_stars < i)]
+        mass_stars.append(np.sum(mass_sel))
 
-    # Step 5: Define radial bins and average velocities
-    bin_edges1 = np.linspace(0, 50,500) 
-    bin_edges2 = np.linspace(51,100,99)  # Adjust as needed
-    bin_edges = np.concatenate((bin_edges1, bin_edges2))
-    bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
-    v_rot_mean = []
-    mass_profile = []
+    for i in rad_values:
+        mass_sel = stellar_mass_gas[(radius_gas < i)]
+        mass_gas.append(np.sum(mass_sel))
 
-    for i in range(len(bin_edges) - 1):
-        bin_mask = (radius_sorted >= bin_edges[i]) & (radius_sorted < bin_edges[i+1])
-        if np.sum(bin_mask) > 0:  # Avoid empty bins
-            v_rot_mean.append(np.mean(v_rot_mass_based[bin_mask]))
-            mass_profile.append(np.sum(stellar_mass_sorted[bin_mask]))
-        else:
-            v_rot_mean.append(0)
+    for i in rad_values:
+        rad = radius_dm[(radius_dm < i)]
+        mass_r = len(rad) * dm_particle_mass
+        mass_dm.append(mass_r)
 
-    return bin_centers, v_rot_mean, mass_profile
+    for i in rad_values:
+        mass_sel_gas = stellar_mass_gas[(radius_gas < i)]
+        mass_sel_star = stellar_mass_stars[(radius_stars < i)]
+        rad = radius_dm[(radius_dm < i)]
+        mass_sel_dm = len(rad) * dm_particle_mass
 
-def process_combined_rotation_curve(gas_data, stars_data, dm_data):
-    """Processes all components (gas, stars, and dark matter) to compute a single rotation curve based on total mass."""
+        big_array = np.hstack((mass_sel_gas, mass_sel_star, mass_sel_dm))
+
+        mass_total.append(np.sum(big_array))
+
+
+
+    v_rot_stars = np.sqrt(G * np.array(mass_stars) / rad_values)
+    v_rot_gas = np.sqrt(G * np.array(mass_gas) / rad_values)
+    v_rot_dm = np.sqrt(G * np.array(mass_dm) / rad_values)
+    v_rot_total = np.sqrt(G * np.array(mass_total) / rad_values)
     
-    # Process each component separately to extract necessary quantities
-    gas_r, gas_v ,gas_mass = process_particle_data(gas_data, 'Gas')
-    stars_r,stars_v ,stars_mass = process_particle_data(stars_data, 'Stars')
-    dm_r, dm_v ,dm_mass = process_particle_data(dm_data, 'Dark Matter', is_dm=True)
+    return v_rot_stars, v_rot_gas, v_rot_dm, v_rot_total, rad_values
+
+#Averaging function
+total_rotation_curve = []
+stars_rotation_curve = []
+gas_rotation_curve = []
+dm_rotation_curve = []
+
+for each in sample_galaxy_id:
+    subhaloid = each
+    v_rot_stars, v_rot_gas, v_rot_dm, v_rot_total, rad_values = rotation_curve_breakdown(subhaloid)
     
+    #if (len(r_stars) == len(s_mass)) and (len(r_gas) == len(g_mass)) and (len(r_dm) == len(dm_mass)):
+    #    total_rotation_curve.append(combined_v)
+    #    stars_rotation_curve.append(v_stars)
+    #    gas_rotation_curve.append(v_gas)
+    #    dm_rotation_curve.append(v_dm)
     
-    min_length = min(len(gas_r), len(gas_mass))
-    gas_r, gas_mass = gas_r[:min_length], gas_mass[:min_length]
-
+    total_rotation_curve.append(v_rot_total)
+    stars_rotation_curve.append(v_rot_stars)
+    gas_rotation_curve.append(v_rot_gas)
+    dm_rotation_curve.append(v_rot_dm)
     
-    # Define common radial bins (assume same for all, adjust if needed)
-    common_r = np.linspace(0, 100, 599)  # Adjust binning as necessary
+
+average_rotation_curve_total = np.mean(total_rotation_curve, axis = 0)
+std_rotation_total = np.std(total_rotation_curve, axis = 0)
+
+average_rotation_curve_stars = np.mean(stars_rotation_curve, axis = 0)
+std_rotation_stars = np.std(stars_rotation_curve, axis = 0)
+
+average_rotation_curve_gas = np.mean(gas_rotation_curve, axis = 0)
+std_rotation_gas = np.std(gas_rotation_curve, axis = 0)
+
+average_rotation_curve_dm = np.mean(dm_rotation_curve, axis = 0)
+std_rotation_dm = np.std(dm_rotation_curve, axis = 0)
+
+#radius_values = np.linspace(0, 30, 69)
+#radius_values_total = np.linspace(0, 30, 70)
+
+plt.plot(rad_values, average_rotation_curve_total, color = "blue" ,label = "total")
+plt.fill_between(rad_values, 
+                 average_rotation_curve_total - std_rotation_total, 
+                 average_rotation_curve_total + std_rotation_total, 
+                 color='blue', alpha=0.1)
+
+
+plt.plot(rad_values, average_rotation_curve_stars, color = "orange", label = "stars")
+plt.fill_between(rad_values, 
+                 average_rotation_curve_stars - std_rotation_stars, 
+                 average_rotation_curve_stars + std_rotation_stars, 
+                 color='orange', alpha=0.1)
+
+plt.plot(rad_values, average_rotation_curve_gas, color = "green" ,label = "gas")
+plt.fill_between(rad_values, 
+                 average_rotation_curve_gas - std_rotation_gas, 
+                 average_rotation_curve_gas + std_rotation_gas, 
+                 color='green', alpha=0.1)
+
+plt.plot(rad_values, average_rotation_curve_dm, color = "red", label = "dm")
+plt.fill_between(rad_values, 
+                 average_rotation_curve_dm - std_rotation_dm, 
+                 average_rotation_curve_dm + std_rotation_dm, 
+                 color='red', alpha=0.1)
+
+filename = "rotation_curve_data.txt"
+
+with open(filename, "w") as file:
+    # Writing header
+    file.write("# radius_stars velocity_stars std_dev_stars radius_gas velocity_gas std_dev_gas radius_dm velocity_dm std_dev_dm radius_total velocity_total std_dev_total\n")
     
-    # Interpolate masses to align bins
-    gas_interp = interp1d(gas_r, gas_mass, bounds_error=False, fill_value=0)
-    stars_interp = interp1d(stars_r, stars_mass, bounds_error=False, fill_value=0)
-    dm_interp = interp1d(dm_r, dm_mass, bounds_error=False, fill_value=0)
-    
-    gas_mass_new = gas_interp(common_r)
-    stars_mass_new = stars_interp(common_r)
-    dm_mass_new = dm_interp(common_r)
-    
-    # Compute total mass in each radial bin
-    total_mass = gas_mass_new + stars_mass_new + dm_mass_new
+    # Writing data using zip()
+    for row in zip(rad_values, average_rotation_curve_stars, std_rotation_stars,
+                   rad_values, average_rotation_curve_gas, std_rotation_gas,
+                   rad_values, average_rotation_curve_dm, std_rotation_dm,
+                   rad_values, average_rotation_curve_total, std_rotation_total):
+        file.write(" ".join(f"{value:.6f}" for value in row) + "\n")  # Format each value to 6 decimal places
 
+print(f"Data successfully written to {filename}")
 
-
-    # Compute cumulative enclosed mass
-    cumulative_mass = np.cumsum(total_mass)
-    
-    # Compute total rotational velocity using the total enclosed mass
-    G = 4.30091e-6  # Gravitational constant in appropriate units
-    v_combined = np.sqrt((G * cumulative_mass) / (common_r + 1e-8))
-    print(len(v_combined))
-    
-    return common_r, v_combined
-
-total_r, combined_v = process_combined_rotation_curve(gas, stars, dm)
-
-r_stars, v_stars, m_stars = process_particle_data(stars, "Stars")
-r_gas, v_gas, m_gas = process_particle_data(gas, "Gas")
-r_dm, v_dm, m_dm = process_particle_data(dm, "Dark matter", is_dm = True)
-
-v_total = np.sqrt((np.array(v_stars))**2 + (np.array(v_gas))**2 + (np.array(v_dm))**2)
-
-
-plt.figure(figsize=(8, 6))
-plt.plot(r_stars, v_stars, marker = 'o' ,label = "Stars")
-plt.plot(r_gas, v_gas, marker = 'o' ,label = "Gas")
-plt.plot(r_dm, v_dm, marker = 'o', label = "Dark matter")
-#plt.plot(total_r, combined_v, marker = 'o', label = "Combined")
-plt.plot(r_stars, v_total, marker = 'o', label = "Quad")
 plt.legend()
 a = '\\ V_{circ}  (kms^{-1})'
 plt.ylabel('$%s$'%a)
 plt.xlabel("Radius (kpc)")
-yaxis = [0,50,100,150,200,250,300,350,400]
-plt.yticks(yaxis)
 plt.show()
+
+plt.savefig("Average_simulation_curve.png")
+
+
+    
