@@ -1,0 +1,94 @@
+simulation_data = np.loadtxt('rotation_curve_data.txt')
+radius_stars = simulation_data[:, 0]
+velocity_stars = simulation_data[:, 1]
+std_dev_stars = simulation_data[:, 2]
+
+radius_gas = simulation_data[:, 3]
+velocity_gas = simulation_data[:, 4]
+std_dev_gas = simulation_data[:, 5]
+
+radius_dm = simulation_data[:, 6]
+velocity_dm = simulation_data[:, 7]
+std_dev_dm = simulation_data[:, 8]
+
+radius_total = simulation_data[:, 9]
+velocity_total = simulation_data[:, 10]
+std_dev_total = simulation_data[:, 11]
+
+
+#plotRotcurve(mwp14, label = 'Milky Way', color = 'red', linestyle = '--', linewidth = 2.5 ,ro = 8.0, vo = 220.0)
+#plotRotcurve(mwp14[0],label='MW Bulge', color = 'orange',linestyle = '--' ,linewidth = 2.5 , ro = 8.0, vo = 220.0)
+#plotRotcurve(mwp14[1],label='MW Disk', color = 'blue' , linestyle = '--', linewidth = 2.5 ,overplot=True, ro = 8.0, vo = 220.0)
+#plotRotcurve(mwp14[2],label='MW Halo',color = 'green', linestyle = '--', linewidth = 2.5 ,overplot=True, ro = 8.0, vo = 220.0)
+#plt.legend()
+
+bin_centers, avg_velocity, avg_v_gas, avg_v_disk, avg_v_bulge, avg_v_dm, std_velocity, std_v_gas, std_v_disk, std_v_bulge, std_v_dm = MilkyWaySampleGalaxy()
+
+y_axis = [0,50,100,150,200,250,300]
+x_axis = [0,2.5,5,7.5,10,12.5,15,17.5]
+
+
+plt.figure(figsize = (8,6))
+plotRotcurve(mwp14[1],label='MW disk ', color = 'blue' , linestyle = '--', overplot = True ,linewidth = 2.5 , ro = 8.0, vo = 220.0)
+plt.plot(radius_stars, velocity_stars, color="blue", label="Stars simulation")
+plt.plot(bin_centers[:len(avg_v_disk)], avg_v_disk, linestyle = ':', color = 'blue', label = "Sample") 
+plt.fill_between(radius_stars, velocity_stars - std_dev_stars, velocity_stars + std_dev_stars, color='blue', alpha=0.05)
+plt.fill_between(bin_centers[:len(avg_v_disk)], np.array(avg_v_disk) - np.array(std_v_disk), np.array(avg_v_disk) + np.array(std_v_disk), color='blue', alpha=0.05)
+plt.yticks(y_axis)
+plt.xticks(x_axis)
+plt.xlabel(r"$Radius (kpc)$")
+plt.ylabel(r"$Velocity (kms^{-1})$")
+plt.title("Disk")
+plt.legend()
+
+plt.figure(figsize = (8,6))
+plotRotcurve(mwp14[0],label='MW Bulge', color = 'orange',linestyle = '--' , overplot = True, linewidth = 2.5 , ro = 8.0, vo = 220.0)
+plt.plot(radius_gas, velocity_gas, color="orange", label="Gas simulation")
+plt.plot(bin_centers[:len(avg_v_bulge)], avg_v_bulge, linestyle = ':', color = 'orange', label = 'Sample') 
+plt.fill_between(radius_gas, velocity_gas - std_dev_gas, velocity_gas + std_dev_gas, color='orange', alpha=0.05)
+plt.fill_between(bin_centers[:len(avg_v_bulge)], np.array(avg_v_bulge) - np.array(std_v_bulge), np.array(avg_v_bulge) + np.array(std_v_bulge), color='orange', alpha=0.05)
+plt.yticks(y_axis)
+plt.xticks(x_axis)
+plt.xlabel(r"$Radius (kpc)$")
+plt.ylabel(r"$Velocity (kms^{-1})$")
+plt.title("Bulge")
+plt.legend()
+
+
+plt.figure(figsize = (8,6))
+plotRotcurve(mwp14[2],label='Milky Way',color = 'green', linestyle = '--', overplot = True, linewidth = 1.5 , ro = 8.0, vo = 220.0)
+plt.plot(radius_dm, velocity_dm, color="green", label="Simulation")
+plt.plot(bin_centers[:len(avg_v_dm)], avg_v_dm, linestyle = ':', color = 'green', label = "Sample") 
+plt.fill_between(bin_centers[:len(avg_v_dm)], np.array(avg_v_dm) - np.array(std_v_dm), np.array(avg_v_dm) + np.array(std_v_dm), color='green', alpha=0.05)
+plt.fill_between(radius_dm, np.array(velocity_dm) - np.array(std_dev_dm), np.array(velocity_dm) + np.array(std_dev_dm), color='green', alpha=0.05)
+plt.yticks(y_axis)
+plt.xticks(x_axis)
+plt.xlabel(r"$Radius (kpc)$")
+plt.ylabel(r"$Velocity (kms^{-1})$")
+plt.title("Dark matter")
+plt.legend()
+
+
+plt.figure(figsize = (8,6))
+plotRotcurve(mwp14, label = 'Milky Way', color = 'red', linestyle = '--', overplot = True, linewidth = 2.5 ,ro = 8.0, vo = 220.0)
+plt.plot(radius_total, velocity_total, color="red", label="Simulation")
+plt.plot(bin_centers[:len(avg_velocity)], avg_velocity, linestyle = ':', color = 'red',label = 'Sample') 
+plt.fill_between(radius_total, velocity_total - std_dev_total, velocity_total + std_dev_total, color='red', alpha=0.05)
+plt.fill_between(bin_centers[:len(avg_velocity)], np.array(avg_velocity) - np.array(std_velocity), np.array(avg_velocity) + np.array(std_velocity), color='red', alpha=0.05)
+plt.yticks(y_axis)
+plt.xticks(x_axis)
+plt.xlabel(r"$Radius (kpc)$")
+plt.ylabel(r"$Velocity (kms^{-1})$")
+plt.title("Total")
+plt.legend()
+
+
+
+
+import matplotlib.pyplot as plt
+from galpy.potential import plotRotcurve  # Import the plotRotcurve function from galpy
+
+
+# Show the plot
+
+plt.show()
