@@ -1,0 +1,78 @@
+#Milky Way like galaxy averaging function
+
+def galaxy_separation(mass, mass_names):
+    # Define the mass range
+    lower_mass = 3.8e10
+    upper_mass = 9.8e10
+    
+    # Filter galaxies within the specified mass range
+    mass_range_indices = (mass >= lower_mass) & (mass <= upper_mass)
+    mass_range_names = mass_names[mass_range_indices][:, 0]
+    
+    return mass_range_names
+
+# Main function update
+def MilkyWaySampleGalaxy():
+    mass, mass_names, mass_disk_scale = load_data(FILE_LOCATION)
+    
+    # Extract galaxies within the specified mass range
+    mass_range_names = galaxy_separation(mass, mass_names)
+    
+    # Create a figure with two columns and two rows (rotation curves and residuals)
+    fig = plt.figure(figsize=(15, 12))
+    gs = GridSpec(2, 1, height_ratios=[3, 1], hspace=0.1)
+
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax1_res = fig.add_subplot(gs[1, 0], sharex=ax1)
+    
+    # Lists to store all rotation curve data for averaging
+    radius_all, velocity_all, v_gas_all, v_disk_all, v_bulge_all, v_dm_all = [], [], [], [], [], []
+    
+    # Loop through each galaxy in the mass range
+    for galaxy_name in mass_range_names:
+        file_extension = f"{galaxy_name}.txt"
+        try:
+            radius, velocity, v_gas, v_disk, v_bulge = load_galaxy_data(file_extension)
+            rs, ps, M2L, _, _ = NFWdata(f"{galaxy_name}.mrt", 2)
+            v_dm = calculate_dark_matter_component(galaxy_name, radius, rs, ps)
+            disk_scale = mass_disk_scale[mass_disk_scale[:, 0] == galaxy_name][0, 2]
+            radius_norm = radius #/ disk_scale
+            v_disk = v_disk * np.sqrt(M2L)
+            
+            # Store data for averaging
+            radius_all.append(radius_norm)
+            velocity_all.append(velocity)
+            v_gas_all.append(v_gas)
+            v_disk_all.append(v_disk)
+            v_bulge_all.append(v_bulge)
+            v_dm_all.append(v_dm)
+        
+        except FileNotFoundError as e:
+            print(f"Skipping {galaxy_name}: {e}")
+    
+    # Calculate and plot the average rotation curve with components
+    bin_centers, avg_velocity, avg_v_gas, avg_v_disk, avg_v_bulge, avg_v_dm, std_velocity, std_v_gas, std_v_disk, std_v_bulge, std_v_dm = calculate_average_rotation_curve_with_dm(mass_range_names, mass_disk_scale)
+    v_total = plot_rotation_curves_with_dm(ax1, bin_centers, avg_velocity, avg_v_gas, avg_v_disk, avg_v_bulge, avg_v_dm, std_velocity, std_v_gas, std_v_disk, std_v_bulge, std_v_dm, "Galaxies in Mass Range 5e10 to 9e10 Solar Masses")
+    
+    # Plot residuals
+    residuals = (np.array(avg_velocity) - v_total) / np.array(avg_velocity)
+    plot_residuals(ax1_res, bin_centers, np.array(avg_velocity), v_total)
+    
+    # Set the same y-axis range for all residual plots
+    ax1_res.set_ylim(min(residuals), max(residuals))
+    
+    # Increase tick sizes
+    ax1.tick_params(axis='both', which='major', labelsize=16)  # Increase tick label size
+    ax1.tick_params(axis='both', which='minor', labelsize=12)  # Increase minor tick label size
+    ax1_res.tick_params(axis='both', which='major', labelsize=16)  # Increase tick label size
+    ax1_res.tick_params(axis='both', which='minor', labelsize=12)  # Increase minor tick label size
+    
+    # Add a single legend for all subplots
+    handles, labels = ax1.get_legend_handles_labels()
+    fig.legend(handles, labels, loc='right', bbox_to_anchor=(1.09, 0.8), ncol=1, fontsize=20)
+    
+    plt.tight_layout()
+    #plt.savefig("rotation_curves_mass_range_5e10_to_9e10.png", bbox_inches='tight')
+    plt.show()
+    return bin_centers, avg_velocity, avg_v_gas, avg_v_disk, avg_v_bulge, avg_v_dm, std_velocity, std_v_gas, std_v_disk, std_v_bulge, std_v_dm
+MilkyWaySampleGalaxy()
