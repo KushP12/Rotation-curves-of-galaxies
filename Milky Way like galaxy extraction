@@ -1,0 +1,109 @@
+#Milky Way like galaxies extraction
+def galaxy_separation(mass, mass_names):
+    # Define the mass range
+    lower_mass = 3.8e10
+    upper_mass = 9.8e10
+    
+    # Filter galaxies within the specified mass range
+    mass_range_indices = (mass >= lower_mass) & (mass <= upper_mass)
+    mass_range_names = mass_names[mass_range_indices][:, 0]
+    
+    return mass_range_names
+
+
+def plot_individual_observed_curves(ax, radius, velocity, galaxy_name):
+    # Plot the observed rotation curve for the individual galaxy
+    ax.plot(radius, velocity, label=f"{galaxy_name}", alpha=0.5, linewidth=2)
+    ax.set_ylabel(r"$Velocity  (kms^{-1})$", fontsize = 25)
+    ax.set_xlabel(r"$Radius (kpc)$", fontsize = 25)
+    ax.tick_params(axis = 'both', which = 'major', labelsize = 20)
+    ax.tick_params(axis = 'both', which = 'minor', labelsize = 12)
+
+def main():
+    mass, mass_names, mass_disk_scale = load_data(FILE_LOCATION)
+    
+    # Extract galaxies within the specified mass range
+    mass_range_names = galaxy_separation(mass, mass_names)
+    
+    # Create a figure with two columns and two rows (rotation curves and residuals)
+    fig = plt.figure(figsize=(15, 12))
+    gs = GridSpec(2, 1, height_ratios=[3, 1], hspace=0.1)
+
+    ax1 = fig.add_subplot(gs[0, 0])
+    #ax1_res = fig.add_subplot(gs[1, 0], sharex=ax1)
+    
+    # Lists to store all observed rotation curve data for averaging
+    radius_all, velocity_all = [], []
+    
+    # Loop through each galaxy in the mass range
+    for galaxy_name in mass_range_names:
+        file_extension = f"{galaxy_name}.txt"
+        try:
+            radius, velocity, _, _, _ = load_galaxy_data(file_extension)
+            disk_scale = mass_disk_scale[mass_disk_scale[:, 0] == galaxy_name][0, 2]
+            radius_norm = radius #/ disk_scale
+            
+            # Plot individual observed rotation curves
+            plot_individual_observed_curves(ax1, radius_norm, velocity, galaxy_name)
+            
+            # Store data for averaging
+            radius_all.append(radius_norm)
+            velocity_all.append(velocity)
+        
+        except FileNotFoundError as e:
+            print(f"Skipping {galaxy_name}: {e}")
+    
+    # Calculate and plot the average observed rotation curve
+    bin_centers, avg_velocity, std_velocity = calculate_average_observed_curve(radius_all, velocity_all)
+    
+    # Plot the average observed rotation curve
+    ax1.plot(bin_centers, avg_velocity, label="Average Observed", color="black", linestyle="--", linewidth = 2.5)
+    ax1.fill_between(bin_centers, avg_velocity - std_velocity, avg_velocity + std_velocity, color="gray", alpha=0.3)
+    
+    # Plot residuals
+    #residuals = (np.array(avg_velocity) - np.array(avg_velocity)) / np.array(avg_velocity)  # Residuals will be zero for the average
+    #plot_residuals(ax1_res, bin_centers, np.array(avg_velocity), np.array(avg_velocity))
+    
+    # Set the same y-axis range for all residual plots
+    #ax1_res.set_ylim(-0.1, 0.1)  # Adjust based on your data
+    
+    # Add a single legend for all subplots
+    handles, labels = ax1.get_legend_handles_labels()
+    fig.legend(handles, labels, loc='right', bbox_to_anchor=(1.08, 0.6), ncol=1, fontsize=15)
+    
+    plt.tight_layout()
+    #plt.savefig("MilkyWayLikeGalaxies.png", bbox_inches='tight')
+    plt.show()
+
+def calculate_average_observed_curve(radius_all, velocity_all, bin_size=20):
+    # Combine all radii and velocities
+    all_radius = np.concatenate(radius_all)
+    all_velocity = np.concatenate(velocity_all)
+    
+    # Create bins for averaging
+    max_radius = max(all_radius)
+    bins = np.linspace(0, max_radius, bin_size)
+    bin_centers = (bins[:-1] + bins[1:]) / 2
+    
+    avg_velocity, std_velocity = [], []
+    
+    for i in range(len(bins) - 1):
+        lower, upper = bins[i], bins[i + 1]
+        velocity_bin = []
+        
+        for j in range(len(radius_all)):
+            mask = (radius_all[j] >= lower) & (radius_all[j] < upper)
+            velocity_bin.extend(velocity_all[j][mask])
+        
+        if velocity_bin:
+            avg_velocity.append(np.mean(velocity_bin))
+            std_velocity.append(np.std(velocity_bin))
+        else:
+            avg_velocity.append(np.nan)
+            std_velocity.append(np.nan)
+    
+    return bin_centers, np.array(avg_velocity), np.array(std_velocity)
+    
+
+if __name__ == "__main__":
+    main()
